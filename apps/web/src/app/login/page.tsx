@@ -23,14 +23,13 @@ function LoginForm() {
   if (!supabase) {
     return (
       <div className="text-center text-sm text-text-dim">
-        <p>
-          This build is running without a backend — accounts are switched off.
-        </p>
+        <p>The club is not seating members here just yet.</p>
         <p className="mt-2">
+          In the meantime,{" "}
           <Link href="/hotseat" className="underline">
-            Play hotseat on this device
+            play hotseat on this device
           </Link>{" "}
-          instead, or see docs/GOING-LIVE.md to wire the real thing.
+          — four chairs, one phone, no account required.
         </p>
       </div>
     );

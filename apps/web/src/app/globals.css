@@ -143,49 +143,90 @@ body {
     transform: scale(1);
   }
 }
+/* Applied to an INNER group only — never to an element that carries an SVG
+   transform attribute, or the animation's fill 'both' final transform would
+   permanently override the pieces' counter-rotation. */
 .ceremony-piece {
   animation: piece-settle 250ms ease-out both;
   transform-box: fill-box;
   transform-origin: center;
 }
 
-/* 3 · Earning a halo: a thin gold ring inscribes and STAYS. */
-@keyframes halo-bloom {
-  0% {
+/* 2 · Check: one-shot 500ms radial ripple when the check appears; the
+   vermilion stroke on the king's square then holds static (no infinite pulse). */
+@keyframes check-ripple {
+  from {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  to {
     opacity: 0;
-    transform: scale(1.4);
-  }
-  60% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  80% {
-    opacity: 0.7;
-  }
-  100% {
-    opacity: 0.95;
-    transform: scale(1);
+    transform: scale(1.6);
   }
 }
-.halo-bloom {
-  animation: halo-bloom 700ms ease-out both;
+.check-ripple {
+  animation: check-ripple 500ms ease-out both;
   transform-box: fill-box;
   transform-origin: center;
 }
 
-/* 4 · Evaporation: dignified dissolve to ash — rising motes. */
-@keyframes evaporate-mote {
+/* 3 · Earning a halo: a thin gold ring inscribes clockwise over 700ms and
+   STAYS. 100.5 = 2π·16, the circumference of the r=16 halo circlet. */
+@keyframes halo-inscribe {
   from {
-    opacity: 0.9;
-    transform: translateY(0);
+    stroke-dashoffset: 100.5;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.halo-inscribe {
+  stroke-dasharray: 100.5;
+  animation: halo-inscribe 700ms ease-out both;
+}
+
+/* 4 · Evaporation: dignified dissolve to ash — the doomed piece fades toward
+   the ash-teal veil for ~550ms while motes rise. */
+@keyframes evaporate-fade {
+  from {
+    opacity: 1;
   }
   to {
     opacity: 0;
-    transform: translateY(-14px);
+  }
+}
+.evaporate-piece {
+  animation: evaporate-fade 550ms ease-in both;
+}
+@keyframes evaporate-veil {
+  0% {
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.evaporate-veil {
+  animation: evaporate-veil 550ms ease-in both;
+}
+@keyframes evaporate-mote {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-16px);
   }
 }
 .evaporate-mote {
-  animation: evaporate-mote 550ms ease-in both;
+  animation: evaporate-mote 600ms ease-in both;
 }
 
 /* 5 · The crown taken: the board's ONE slow rotation lives on this class. */
@@ -204,9 +245,20 @@ body {
     stroke-dashoffset: 0;
   }
 }
+/* 1760 ≈ 2π·280 — the rendered rim circle's radius (OUTER_R). Keep in sync
+   with the <circle r> RotoBoard draws for the checkmate ceremony. */
 .ceremony-rim {
   stroke-dasharray: 1760;
   animation: rim-inscribe 1.4s ease-in-out both;
+}
+
+/* Keyboard board cursor: rendered whenever a cursor square exists, visible
+   only while the board wrapper has keyboard focus. */
+.board-cursor {
+  opacity: 0;
+}
+.roto-board-wrap:focus-visible .board-cursor {
+  opacity: 1;
 }
 
 /* Reduced motion: the app also offers an in-app override; this is the OS layer. */
@@ -215,6 +267,7 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important; /* staggered settles fill 'both' — a held delay would hide pieces */
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }

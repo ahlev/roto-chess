@@ -7,7 +7,7 @@
  * submove 2's confirm submits the whole atomic turn).
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applySubmove,
   applyTurn,
@@ -18,13 +18,30 @@ import {
   legalMovesFrom,
   legalSecondSubmoves,
   claimableDraws,
+  playGame,
   type BoardState,
   type GameStatus,
   type Move,
+  type Seat,
   type Square,
   type Turn,
   type TurnEvents,
 } from "@rotochess/engine";
+
+/**
+ * Versioned storage key for the turn history (never the full BoardState —
+ * the game IS initialState + turns, so rehydration is a replay). Bump the
+ * suffix on any format change; unreadable data is discarded silently.
+ */
+const STORAGE_KEY = "roto.hotseat.game.v1";
+
+function clearSavedGame(): void {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // private mode etc. — nothing to clear
+  }
+}
 
 export interface HotseatGame {
   /** The authoritative state (before any staged submove). */
@@ -46,6 +63,8 @@ export interface HotseatGame {
   lastMoveSquares: readonly Square[];
   /** Events from the most recently applied turn (halos, evaporations…). */
   lastEvents: TurnEvents | null;
+  /** Who played the turn `lastEvents` describes (the seat has since passed). */
+  lastEventsSeat: Seat | null;
   tap: (square: Square) => void;
   choosePending: (move: Move) => void;
   confirm: () => void;
@@ -65,6 +84,52 @@ export function useHotseatGame(): HotseatGame {
   const [pendingChoice, setPendingChoice] = useState<Move | null>(null);
   const [lastMoveSquares, setLastMoveSquares] = useState<readonly Square[]>([]);
   const [lastEvents, setLastEvents] = useState<TurnEvents | null>(null);
+  const [lastEventsSeat, setLastEventsSeat] = useState<Seat | null>(null);
+
+  // ---- persistence: a refresh must not destroy a live four-player game ----
+
+  // Rehydrate once on mount by replaying the stored turns through the
+  // engine (playGame validates every turn; anything corrupt throws and the
+  // saved game is discarded silently).
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const stored: unknown = JSON.parse(raw);
+      if (!Array.isArray(stored) || stored.length === 0) return;
+      const savedTurns = stored as Turn[];
+      const fold = playGame(savedTurns);
+      setState(fold.finalState);
+      setTurns(savedTurns);
+      const last = savedTurns[savedTurns.length - 1];
+      if (last) {
+        const touched: Square[] = [];
+        for (const sub of last.submoves) touched.push(sub.from, sub.to);
+        setLastMoveSquares(touched);
+      }
+    } catch {
+      clearSavedGame();
+    }
+  }, []);
+
+  // Persist the turn history on every change (skipping the initial render,
+  // which would otherwise clobber a saved game before rehydration lands).
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!hydratedRef.current) {
+      hydratedRef.current = true;
+      return;
+    }
+    try {
+      if (turns.length === 0) {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(turns));
+      }
+    } catch {
+      // storage unavailable — play continues, just unsaved
+    }
+  }, [turns]);
 
   const opening = inOpening(state);
 
@@ -155,6 +220,7 @@ export function useHotseatGame(): HotseatGame {
     const turn: Turn = stagedFirst
       ? { submoves: [stagedFirst, pendingChoice] as const }
       : { submoves: [pendingChoice] as const };
+    const mover = state.activeSeat;
     const result = applyTurn(state, turn);
     if (!result.ok) {
       // Should be unreachable (moves come from the engine's own legal sets);
@@ -169,6 +235,7 @@ export function useHotseatGame(): HotseatGame {
     setTurns((prev) => [...prev, turn]);
     setLastMoveSquares(touched);
     setLastEvents(result.events);
+    setLastEventsSeat(mover);
     setStagedFirst(null);
     cancel();
   }, [cancel, opening, pendingChoice, stagedFirst, state]);
@@ -178,11 +245,13 @@ export function useHotseatGame(): HotseatGame {
   }, []);
 
   const reset = useCallback(() => {
+    clearSavedGame();
     setState(initialState());
     setTurns([]);
     setStagedFirst(null);
     setLastMoveSquares([]);
     setLastEvents(null);
+    setLastEventsSeat(null);
     cancel();
   }, [cancel]);
 
@@ -200,6 +269,7 @@ export function useHotseatGame(): HotseatGame {
     pendingChoice,
     lastMoveSquares,
     lastEvents,
+    lastEventsSeat,
     tap,
     choosePending,
     confirm,

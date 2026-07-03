@@ -24,6 +24,15 @@ const SEAT_NAME: Record<Seat, string> = {
   4: "West",
 };
 
+const PIECE_NAME: Record<string, string> = {
+  P: "pawn",
+  N: "knight",
+  B: "bishop",
+  R: "rook",
+  Q: "queen",
+  K: "king",
+};
+
 export default function HotseatPage() {
   const game = useHotseatGame();
   const [rotateToActive, setRotateToActive] = useState(true);
@@ -40,7 +49,7 @@ export default function HotseatPage() {
     }
     if (s.kind === "stalemate") return "Stalemate — a draw for all four.";
     const seat = game.state.activeSeat;
-    // §7.3 out loud: a check on a NON-active player is not yet decided —
+    // §6.3 out loud: a check on a NON-active player is not yet decided —
     // the game's most counterintuitive rule, taught where it appears.
     const nonActiveChecked = s.inCheck.filter((c) => c !== seat);
     const checks = s.inCheck.length
@@ -55,6 +64,21 @@ export default function HotseatPage() {
     const step = openingStep ? ` — move ${openingStep} of 2` : "";
     return `${SEAT_NAME[seat]} to move${step}${checks}`;
   }, [game.state.activeSeat, game.status, openingStep]);
+
+  // The halo fires AFTER the turn passes, so the note must name whose piece
+  // earned it — the player reading it is already the NEXT one.
+  const haloNote = useMemo(() => {
+    const events = game.lastEvents;
+    const seat = game.lastEventsSeat;
+    if (!events || seat === null || events.halosEarned.length === 0) {
+      return null;
+    }
+    const square = events.halosEarned[0];
+    const kind = square === undefined ? undefined : game.state.board[square]?.kind;
+    const piece = (kind && PIECE_NAME[kind]) || "piece";
+    const who = SEAT_NAME[seat];
+    return `${who}'s ${piece} has earned its halo — it may now cross ${who}'s meridian freely, forever.`;
+  }, [game.lastEvents, game.lastEventsSeat, game.state.board]);
 
   const exportRpgn = () => {
     const text = gameToRotoPgn(game.turns, {
@@ -72,16 +96,30 @@ export default function HotseatPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col px-3 pb-28">
-      <header className="flex items-center justify-between py-3">
-        <Link
-          href="/"
-          className="text-xl text-text"
-          style={{ fontFamily: "var(--font-instrument-serif)" }}
-        >
-          {BRAND.name}
-        </Link>
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3">
+        <div className="flex items-baseline gap-3">
+          <Link
+            href="/"
+            className="text-xl text-text"
+            style={{ fontFamily: "var(--font-instrument-serif)" }}
+          >
+            {BRAND.name}
+          </Link>
+          {/* New tab, so a live game is never lost to a rules question. */}
+          <Link
+            href="/rules"
+            target="_blank"
+            rel="noopener"
+            className="text-xs text-text-dim underline"
+          >
+            The Book
+          </Link>
+          <Link href="/learn" className="text-xs text-text-dim underline">
+            Learn the game
+          </Link>
+        </div>
         <div className="flex items-center gap-3 text-xs text-text-dim">
-          <label className="flex items-center gap-1">
+          <label className="flex min-h-11 items-center gap-1">
             <input
               type="checkbox"
               checked={rotateToActive}
@@ -91,14 +129,14 @@ export default function HotseatPage() {
           </label>
           <button
             type="button"
-            className="rounded border border-line px-2 py-1"
+            className="min-h-11 rounded border border-line px-2 py-1"
             onClick={() => setShowHistory((v) => !v)}
           >
             {showHistory ? "Board" : "History"}
           </button>
           <button
             type="button"
-            className="rounded border border-line px-2 py-1"
+            className="min-h-11 rounded border border-line px-2 py-1"
             onClick={exportRpgn}
           >
             .rpgn
@@ -120,7 +158,7 @@ export default function HotseatPage() {
           <button
             type="button"
             onClick={game.unstage}
-            className="rounded-full border border-line px-2 py-0.5"
+            className="min-h-6 rounded-full border border-line px-2 py-1"
             data-testid="unstage"
           >
             Take it back
@@ -142,12 +180,12 @@ export default function HotseatPage() {
               game.status.inCheck.includes(
                 partnerOf(game.state.activeSeat),
               ),
-            text: "Your partner is in check. You're not required to help (§7.2) — but you're allowed to. Sometimes the best help is a counterattack.",
+            text: "Your partner is in check. You're not required to help (§6.2) — but you're allowed to. Sometimes the best help is a counterattack.",
           },
           {
             key: "halo",
-            active: (game.lastEvents?.halosEarned.length ?? 0) > 0,
-            text: "Halo earned. That piece may now cross your meridian freely, forever.",
+            active: haloNote !== null,
+            text: haloNote ?? "",
           },
         ]}
       />

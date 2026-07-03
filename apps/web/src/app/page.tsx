@@ -10,7 +10,7 @@ import { BRAND } from "@/config/brand";
 export default function Landing() {
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-6 pb-16">
-      <header className="flex items-center justify-between py-5">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-5">
         <span
           className="flex items-center gap-2 text-2xl text-text"
           style={{ fontFamily: "var(--font-instrument-serif)" }}
@@ -52,7 +52,7 @@ export default function Landing() {
               Take a seat
             </Link>
             <Link
-              href="/rules"
+              href="/learn"
               className="rounded-full border border-line px-6 py-3 text-text-dim"
             >
               How to play

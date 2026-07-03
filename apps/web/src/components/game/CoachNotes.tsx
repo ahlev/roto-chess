@@ -53,20 +53,23 @@ export function CoachNotes({ notes }: { notes: CoachNote[] }) {
       className="mx-auto mb-2 flex max-w-md items-start justify-between gap-3 rounded-lg border border-line bg-surface-raised p-3 text-xs text-text"
     >
       <p className="leading-relaxed">{visible.text}</p>
-      <div className="flex shrink-0 flex-col gap-1">
+      <div className="flex shrink-0 flex-col">
+        {/* 44px touch targets; the padding is transparent so the visual pill stays light. */}
         <button
           type="button"
-          className="rounded-full border border-line px-2 py-0.5 text-text-dim"
+          className="flex min-h-11 items-center justify-center text-text-dim"
           onClick={() => {
             markSeen(visible.key);
             setVisible(null);
           }}
         >
-          Noted
+          <span className="rounded-full border border-line px-2 py-1">
+            Noted
+          </span>
         </button>
         <button
           type="button"
-          className="rounded-full px-2 py-0.5 text-[10px] text-text-dim underline"
+          className="min-h-11 rounded-full px-2 py-1 text-[10px] text-text-dim underline"
           onClick={() => {
             try {
               localStorage.setItem(OFF_KEY, "1");

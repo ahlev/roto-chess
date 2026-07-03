@@ -81,14 +81,22 @@ export default function LearnPage() {
         </Link>
       </header>
 
-      <div className="flex items-center gap-1 pb-4" aria-label="Progress">
-        {BEATS.map((_, i) => (
-          <span
+      <div className="flex items-center gap-1 pb-2" role="group" aria-label="Progress">
+        {BEATS.map((b, i) => (
+          <button
             key={i}
-            className={`h-1.5 flex-1 rounded-full ${
-              i <= beat ? "bg-[color:var(--focus-ring)]" : "bg-surface-raised"
-            }`}
-          />
+            type="button"
+            onClick={() => setBeat(i)}
+            aria-label={`Go to step ${i + 1}: ${b.title}`}
+            aria-current={i === beat ? "step" : undefined}
+            className="flex-1 rounded-full py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--focus-ring)]"
+          >
+            <span
+              className={`block h-1.5 rounded-full ${
+                i <= beat ? "bg-[color:var(--focus-ring)]" : "bg-surface-raised"
+              }`}
+            />
+          </button>
         ))}
       </div>
 
@@ -109,7 +117,7 @@ export default function LearnPage() {
             caption="Red & Blue (N–S) against Black & Gold (E–W)."
           />
         ) : beat === 4 ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <DemoBoard
               state={boards[4]!}
               caption="No halo: crossing evaporates."
