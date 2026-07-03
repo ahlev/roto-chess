@@ -5,6 +5,13 @@ export default tseslint.config(
   { ignores: ["**/node_modules/", "**/dist/", "**/.next/", "**/coverage/"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // Node build scripts (piece baking etc.): Node globals are fine here.
+  {
+    files: ["**/scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+    },
+  },
   {
     rules: {
       "@typescript-eslint/no-unused-vars": [
