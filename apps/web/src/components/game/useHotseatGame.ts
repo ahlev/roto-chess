@@ -46,6 +46,8 @@ export interface HotseatGame {
   tap: (square: Square) => void;
   choosePending: (move: Move) => void;
   confirm: () => void;
+  /** Cancels only the pending destination; selection survives. */
+  cancelPending: () => void;
   cancel: () => void;
   unstage: () => void;
   reset: () => void;
@@ -97,6 +99,13 @@ export function useHotseatGame(): HotseatGame {
           return;
         }
       }
+      // Tapping the already-selected piece deselects (UX §1.2).
+      if (square === selected) {
+        setSelected(null);
+        setPending([]);
+        setPendingChoice(null);
+        return;
+      }
       // (Re)select one of the mover's pieces with legal moves.
       const hasMoves = availableMoves.some((m) => m.from === square);
       if (hasMoves) {
@@ -113,6 +122,13 @@ export function useHotseatGame(): HotseatGame {
     [availableMoves, selected, selectionMoves, status.kind],
   );
 
+  /** Cancel the pending destination but KEEP the selection (UX §2.3). */
+  const cancelPending = useCallback(() => {
+    setPending([]);
+    setPendingChoice(null);
+  }, []);
+
+  /** Full clear (post-confirm, unstage, game reset). */
   const cancel = useCallback(() => {
     setPending([]);
     setPendingChoice(null);
@@ -180,6 +196,7 @@ export function useHotseatGame(): HotseatGame {
     tap,
     choosePending,
     confirm,
+    cancelPending,
     cancel,
     unstage,
     reset,

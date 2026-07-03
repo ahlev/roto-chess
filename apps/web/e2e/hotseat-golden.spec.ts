@@ -11,38 +11,33 @@ import {
   applyTurn,
   initialState,
   parseGame,
-  rankOf,
-  fileOf,
   type BoardState,
   type Move,
   type Seat,
 } from "@rotochess/engine";
 
-// Board geometry constants mirrored from board-geometry.ts (test-side math).
-const VIEWBOX = 680;
-const CENTER = 340;
-const INNER_R = 120;
-const RING_W = 40;
-const SECTOR_DEG = 11.25;
-
-function rotationForSeat(seat: Seat): number {
-  return 180 - (seat - 1) * 90;
-}
+// Use the app's own geometry tables (pure TS) — no mirrored constants that
+// can drift. Any geometry change breaks these imports loudly at compile.
+import {
+  SQUARES,
+  VIEWBOX,
+  CENTER,
+  polarPoint,
+  rotationForSeat,
+} from "../src/components/board/board-geometry";
 
 function squareScreenPoint(
   sq: number,
   orientation: Seat,
   box: { x: number; y: number; width: number; height: number },
 ): { x: number; y: number } {
-  const midDeg = rankOf(sq) * SECTOR_DEG + SECTOR_DEG / 2;
-  const midR = INNER_R + fileOf(sq) * RING_W + RING_W / 2;
-  const deg = midDeg + rotationForSeat(orientation);
-  const rad = (deg * Math.PI) / 180;
-  const vx = CENTER + midR * Math.sin(rad);
-  const vy = CENTER - midR * Math.cos(rad);
+  const g = SQUARES[sq];
+  if (!g) throw new Error(`bad square ${sq}`);
+  const p = polarPoint(g.midDeg + rotationForSeat(orientation), g.midR);
   const scale = box.width / VIEWBOX;
-  return { x: box.x + vx * scale, y: box.y + vy * scale };
+  return { x: box.x + p.x * scale, y: box.y + p.y * scale };
 }
+void CENTER;
 
 async function playSubmove(
   page: Page,

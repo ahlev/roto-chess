@@ -26,8 +26,11 @@ import {
   type Square,
 } from "@rotochess/engine";
 
-export const VIEWBOX = 680;
-export const CENTER = VIEWBOX / 2; // 340
+// 600 leaves just enough margin for the meridian overhang + strokes; the
+// annulus fills 93% of the box so a 351pt phone render keeps its cells at
+// the spec's tap-target sizes (a 680 box wasted 60 units per side).
+export const VIEWBOX = 600;
+export const CENTER = VIEWBOX / 2; // 300
 export const INNER_R = 120;
 export const OUTER_R = 280;
 export const RING_W = (OUTER_R - INNER_R) / FILE_COUNT; // 40
@@ -220,4 +223,52 @@ export function distSq(ax: number, ay: number, bx: number, by: number): number {
   const dx = ax - bx;
   const dy = ay - by;
   return dx * dx + dy * dy;
+}
+
+/** Inverse of the board group rotation: screen/viewBox point → canonical board space. */
+export function toBoardSpace(
+  x: number,
+  y: number,
+  rotationDeg: number,
+): { x: number; y: number } {
+  const r = rad(-rotationDeg);
+  return {
+    x: CENTER + (x - CENTER) * Math.cos(r) - (y - CENTER) * Math.sin(r),
+    y: CENTER + (x - CENTER) * Math.sin(r) + (y - CENTER) * Math.cos(r),
+  };
+}
+
+/**
+ * Legal-move snap (UX layer 2) — the whole policy in one tested place.
+ * A tap snaps to the nearest legal target within `radius` ONLY when doing
+ * so cannot steal a deliberate tap: never away from a directly-hit legal
+ * target, never away from a square the snapper says is protected (the
+ * active seat's own pieces — re-selection must always win), and only when
+ * the tap is closer to the target's centroid than to its own cell's.
+ */
+export function snapToTargets(
+  x: number,
+  y: number,
+  rotationDeg: number,
+  targets: ReadonlySet<Square>,
+  isProtected: (sq: Square) => boolean,
+  radius = 38, // ≈22pt at a 351pt render of the 600 viewBox
+): Square | null {
+  const direct = hitTest(x, y, rotationDeg);
+  if (direct !== null && targets.has(direct)) return direct;
+  if (direct !== null && isProtected(direct)) return direct;
+  const p = toBoardSpace(x, y, rotationDeg);
+  let best: { sq: Square; d: number } | null = null;
+  for (const t of targets) {
+    const g = SQUARES[t];
+    if (!g) continue;
+    const d = distSq(p.x, p.y, g.cx, g.cy);
+    if (d <= radius * radius && (!best || d < best.d)) best = { sq: t, d };
+  }
+  if (best === null) return direct;
+  if (direct !== null) {
+    const own = SQUARES[direct];
+    if (own && distSq(p.x, p.y, own.cx, own.cy) < best.d) return direct;
+  }
+  return best.sq;
 }

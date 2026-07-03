@@ -35,11 +35,13 @@
 
   /* Semantics — form-first, color-second. Never hue alone. */
   --check: #ff5a45; /* vermilion pulse — always with the pulse motif */
-  --halo: #f2d27c; /* radiant pale gold — always a RING, never a fill */
+  --halo: #f2d27c; /* radiant pale gold — RESERVED for halos, always a RING */
   --evaporate: #8fa6a0; /* cool ash-teal mist */
   --danger: #d65745;
   --success: #8faf7e;
   --focus-ring: #e8d9b8;
+  --last-move: #cbbfa4; /* warm neutral tint for last-move squares — NOT halo gold */
+  --warning-surface: #3a2a14; /* amber confirm-bar surface for evaporation warnings */
 
   /* Board surface (the annulus itself — matches the canonical diagram) */
   --board-cream: #f0e6d2;
@@ -98,6 +100,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-instrument-sans), system-ui, sans-serif;
+  accent-color: var(--focus-ring); /* native controls stay on palette */
 }
 
 /* Compendium mode: rules & marketing pages read like paper. */

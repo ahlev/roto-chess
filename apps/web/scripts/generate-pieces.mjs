@@ -24,7 +24,10 @@ const STYLES = {
   1: { body: "#b5342a", line: "#26201a" }, // North red
   2: { body: "#26201a", line: "#f3ebdd" }, // East black, cream detailing
   3: { body: "#2f62a8", line: "#26201a" }, // South blue
-  4: { body: "#211b14", line: "#c9962e" }, // West gold, hollow-outlined
+  // West gold: hollow-outlined per spec, but with a warm dark-gold body and
+  // the bright outline so pawns/knights read GOLD (not black) at phone size
+  // — the fidelity review's smallest-glyph finding.
+  4: { body: "#4a3a12", line: "#d9ae4e" },
 };
 
 function tint(svg, style) {
@@ -48,7 +51,13 @@ let count = 0;
 for (const kind of KINDS) {
   const raw = readFileSync(join(rawDir, `w${kind}.svg`), "utf8");
   for (const seat of [1, 2, 3, 4]) {
-    writeFileSync(join(outDir, `${seat}${kind}.svg`), tint(raw, STYLES[seat]));
+    const tinted = tint(raw, STYLES[seat]);
+    // Fail loudly if the source set ever changes shape and a fill/stroke
+    // slips through untinted.
+    if (/#fff\b|#ffffff\b|"#000"|:#000\b/u.test(tinted)) {
+      throw new Error(`untinted color survived in ${seat}${kind}`);
+    }
+    writeFileSync(join(outDir, `${seat}${kind}.svg`), tinted);
     count++;
   }
 }

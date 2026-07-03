@@ -25,11 +25,11 @@ import {
   NUMERAL_ANCHORS,
   SQUARES,
   VIEWBOX,
-  distSq,
   hitTest,
   movePathD,
   polarPoint,
   rotationForSeat,
+  snapToTargets,
 } from "./board-geometry";
 
 const SEAT_BRIGHT: Record<Seat, string> = {
@@ -39,8 +39,6 @@ const SEAT_BRIGHT: Record<Seat, string> = {
   4: "var(--west-gold-bright)",
 };
 
-/** Snap radius in viewBox units (~22pt at a 351pt render of a 680 viewBox). */
-const SNAP_RADIUS = 42;
 const PIECE_SIZE = 34;
 
 export interface RotoBoardProps {
@@ -101,35 +99,23 @@ export function RotoBoard({
   const handlePointer = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       if (!interactive || !onSquareTap || !svgRef.current) return;
+      if (e.button !== 0 && e.pointerType === "mouse") return;
       const rect = svgRef.current.getBoundingClientRect();
-      const scale = VIEWBOX / rect.width;
-      const x = (e.clientX - rect.left) * scale;
-      const y = (e.clientY - rect.top) * scale;
-      let square = hitTest(x, y, rotation);
-      // Legal-move snap (UX layer 2): a near-miss within SNAP_RADIUS of a
-      // legal destination's centroid snaps to it.
-      if (selected !== null && targetSquares.size > 0) {
-        const rad = (-rotation * Math.PI) / 180;
-        const rx =
-          CENTER + (x - CENTER) * Math.cos(rad) - (y - CENTER) * Math.sin(rad);
-        const ry =
-          CENTER + (x - CENTER) * Math.sin(rad) + (y - CENTER) * Math.cos(rad);
-        let best: { sq: Square; d: number } | null = null;
-        for (const t of targetSquares) {
-          const g = SQUARES[t];
-          if (!g) continue;
-          const d = distSq(rx, ry, g.cx, g.cy);
-          if (d <= SNAP_RADIUS * SNAP_RADIUS && (!best || d < best.d)) {
-            best = { sq: t, d };
-          }
-        }
-        if (best && (square === null || !targetSquares.has(square))) {
-          square = best.sq;
-        }
-      }
+      const x = ((e.clientX - rect.left) * VIEWBOX) / rect.width;
+      const y = ((e.clientY - rect.top) * VIEWBOX) / rect.height;
+      const square =
+        selected !== null && targetSquares.size > 0
+          ? snapToTargets(
+              x,
+              y,
+              rotation,
+              targetSquares,
+              (sq) => state.board[sq]?.seat === state.activeSeat,
+            )
+          : hitTest(x, y, rotation);
       if (square !== null) onSquareTap(square);
     },
-    [interactive, onSquareTap, rotation, selected, targetSquares],
+    [interactive, onSquareTap, rotation, selected, targetSquares, state],
   );
 
   return (
@@ -147,7 +133,9 @@ export function RotoBoard({
           <path
             key={g.square}
             d={g.path}
-            fill={g.color === 1 ? "var(--board-cream)" : "var(--board-umber)"}
+            // Canonical parity (verified square-by-square against Figure 1):
+            // internal parity 0 (e.g. 1A) is CREAM, parity 1 is umber.
+            fill={g.color === 0 ? "var(--board-cream)" : "var(--board-umber)"}
             stroke="var(--line)"
             strokeWidth={0.6}
           />
@@ -166,8 +154,8 @@ export function RotoBoard({
             <path
               key={`last-${sq}`}
               d={SQUARES[sq].path}
-              fill="var(--halo)"
-              fillOpacity={0.14}
+              fill="var(--last-move)"
+              fillOpacity={0.3}
               stroke="none"
             />
           ) : null,
@@ -198,15 +186,52 @@ export function RotoBoard({
           ) : null,
         )}
         {pendingMove && (
-          <path
-            d={movePathD(pendingMove.from, pendingMove.path)}
-            fill="none"
-            stroke={SEAT_BRIGHT[state.activeSeat]}
-            strokeWidth={3.5}
-            strokeLinecap="round"
-            strokeDasharray="1 8"
-            opacity={0.95}
-          />
+          <>
+            <defs>
+              <marker
+                id="path-arrow"
+                viewBox="0 0 8 8"
+                refX="6"
+                refY="4"
+                markerWidth="5"
+                markerHeight="5"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 8 4 L 0 8 z" fill={SEAT_BRIGHT[state.activeSeat]} />
+              </marker>
+            </defs>
+            <path
+              d={movePathD(pendingMove.from, pendingMove.path)}
+              fill="none"
+              stroke={SEAT_BRIGHT[state.activeSeat]}
+              strokeWidth={3.5}
+              strokeLinecap="round"
+              strokeDasharray="1 8"
+              opacity={0.95}
+              markerEnd="url(#path-arrow)"
+            />
+            {/* Ghost of the mover at its destination (60%) — the clearest
+                "this is where it lands" signal on small cells. */}
+            {(() => {
+              const mover = state.board[pendingMove.from];
+              const g = SQUARES[pendingMove.to];
+              if (!mover || !g) return null;
+              return (
+                <g
+                  transform={`rotate(${-rotation} ${g.cx} ${g.cy})`}
+                  opacity={0.6}
+                >
+                  <image
+                    href={`/pieces/${mover.seat}${pendingMove.promotion ?? mover.kind}.svg`}
+                    x={g.cx - PIECE_SIZE / 2}
+                    y={g.cy - PIECE_SIZE / 2}
+                    width={PIECE_SIZE}
+                    height={PIECE_SIZE}
+                  />
+                </g>
+              );
+            })()}
+          </>
         )}
         {selected !== null &&
           [...targetSquares].map((sq) => {
@@ -263,8 +288,10 @@ export function RotoBoard({
                 <circle
                   cx={g.cx}
                   cy={g.cy + PIECE_SIZE / 2 - 4}
-                  r={1.8}
+                  r={3}
                   fill="var(--piece-cream-detail)"
+                  stroke="var(--piece-outline)"
+                  strokeWidth={0.6}
                 />
               )}
             </g>
@@ -279,7 +306,7 @@ export function RotoBoard({
             transform={`rotate(${-rotation} ${n.x} ${n.y})`}
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize={9}
+            fontSize={10.5}
             fill="var(--text-dim)"
             style={{ fontFamily: "var(--font-plex-mono)" }}
           >
@@ -294,23 +321,48 @@ export function RotoBoard({
           INNER_R - 30,
         );
         const active = state.activeSeat === seat;
+        const r = active ? 13 : 9;
+        // East's form identity (never hue alone): the dot-in-ring variant.
+        const eastRing = seat === 2;
         return (
           <g key={`dot-${seat}`}>
-            <circle
-              cx={p.x}
-              cy={p.y}
-              r={active ? 8 : 5}
-              fill={SEAT_BRIGHT[seat]}
-              opacity={active ? 1 : 0.55}
-            />
+            {eastRing ? (
+              <>
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={r}
+                  fill="var(--bg)"
+                  stroke={SEAT_BRIGHT[seat]}
+                  strokeWidth={1.5}
+                  opacity={active ? 1 : 0.55}
+                />
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={r - 3}
+                  fill={SEAT_BRIGHT[seat]}
+                  opacity={active ? 1 : 0.55}
+                />
+              </>
+            ) : (
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={r}
+                fill={SEAT_BRIGHT[seat]}
+                opacity={active ? 1 : 0.55}
+              />
+            )}
             <text
               x={p.x}
               y={p.y}
               textAnchor="middle"
               dominantBaseline="central"
-              fontSize={active ? 8 : 6}
+              fontSize={active ? 13 : 9}
               fontWeight={700}
               fill="var(--bg)"
+              style={{ fontFamily: "var(--font-plex-mono)" }}
             >
               {SEAT_COMPASS[seat]}
             </text>

@@ -39,8 +39,17 @@ export default function HotseatPage() {
     }
     if (s.kind === "stalemate") return "Stalemate — a draw for all four.";
     const seat = game.state.activeSeat;
+    // §7.3 out loud: a check on a NON-active player is not yet decided —
+    // the game's most counterintuitive rule, taught where it appears.
+    const nonActiveChecked = s.inCheck.filter((c) => c !== seat);
     const checks = s.inCheck.length
-      ? ` · Check on ${s.inCheck.map((c) => SEAT_NAME[c]).join(" and ")}`
+      ? ` · Check on the ${s.inCheck
+          .map((c) => `${SEAT_NAME[c]} King`)
+          .join(" and the ")}${
+          nonActiveChecked.length
+            ? " — not checkmate unless it stands on their turn"
+            : ""
+        }`
       : "";
     const step = openingStep ? ` — move ${openingStep} of 2` : "";
     return `${SEAT_NAME[seat]} to move${step}${checks}`;
@@ -98,6 +107,7 @@ export default function HotseatPage() {
 
       <p
         data-testid="status-line"
+        aria-live="polite"
         className="pb-2 text-center text-sm text-text-dim"
       >
         {statusLine}
@@ -105,14 +115,14 @@ export default function HotseatPage() {
 
       {game.stagedFirst && (
         <div className="mb-2 flex items-center justify-center gap-2 text-xs text-text-dim">
-          <span>first move staged</span>
+          <span>First move recorded.</span>
           <button
             type="button"
             onClick={game.unstage}
-            className="rounded border border-line px-2 py-0.5"
+            className="rounded-full border border-line px-2 py-0.5"
             data-testid="unstage"
           >
-            undo
+            Take it back
           </button>
         </div>
       )}
@@ -167,7 +177,7 @@ export default function HotseatPage() {
 
       {(game.draws.threefold || game.draws.fiftyMove) &&
         game.status.kind === "active" && (
-          <p className="mt-2 text-center text-xs text-[color:var(--halo)]">
+          <p className="mt-2 text-center text-xs text-text-dim">
             A draw may be claimed (
             {game.draws.threefold ? "threefold repetition" : "fifty-move rule"}
             ).
@@ -181,7 +191,7 @@ export default function HotseatPage() {
         openingStep={openingStep}
         onChoose={game.choosePending}
         onConfirm={game.confirm}
-        onCancel={game.cancel}
+        onCancel={game.cancelPending}
       />
     </main>
   );

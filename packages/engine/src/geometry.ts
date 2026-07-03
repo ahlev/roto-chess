@@ -87,7 +87,8 @@ export function isValidFile(file: number): boolean {
 /**
  * Square color for the checkerboard pattern: (rank + file) % 2.
  * 32 ranks is even, so the coloring closes consistently around the ring.
- * 0 = dark (umber), 1 = light (cream) — labels are the renderer's concern.
+ * Against the canonical diagram (Figure 1): parity 0 (e.g. 1A) renders
+ * CREAM, parity 1 renders umber.
  */
 export function squareColor(square: Square): 0 | 1 {
   return ((rankOf(square) + fileOf(square)) % 2) as 0 | 1;

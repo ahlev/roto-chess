@@ -64,18 +64,24 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
           <span className="w-6 text-right text-text-dim">{r + 1}.</span>
           {round.map((entry, i) => {
             const ply = r * 4 + i + 1;
-            return (
+            // Compass letter is a VISIBLE prefix — seat identity is never
+            // carried by color alone.
+            const text = `${SEAT_COMPASS[entry.seat]}·${entry.token}`;
+            return onJump ? (
               <button
                 key={i}
                 type="button"
-                onClick={() => onJump?.(ply)}
+                onClick={() => onJump(ply)}
                 className={`${SEAT_TEXT[entry.seat]} ${
                   currentPly === ply ? "underline" : ""
                 } hover:underline`}
-                title={`${SEAT_COMPASS[entry.seat]} — jump here`}
               >
-                {entry.token}
+                {text}
               </button>
+            ) : (
+              <span key={i} className={SEAT_TEXT[entry.seat]}>
+                {text}
+              </span>
             );
           })}
         </li>
