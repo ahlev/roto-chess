@@ -21,24 +21,24 @@ describe("banana curl geometry (§5.4)", () => {
   it("walks all four diagonal rays with exactly one bounce each", () => {
     const dests = destinations(loneBishop(), "5B");
     // Ray +rank/outward: 6C, 7D(rail), bounce, 8C, 9B, 10A(end at rail)
-    for (const c of ["6C", "7D", "8C", "9B", "10A"]) expect(dests).toContain(c);
+    for (const c of ["C6", "D7", "C8", "B9", "A10"]) expect(dests).toContain(c);
     // Ray −rank/outward: 4C, 3D, bounce, 2C, 1B, 32A
-    for (const c of ["4C", "3D", "2C", "1B", "32A"]) expect(dests).toContain(c);
+    for (const c of ["C4", "D3", "C2", "B1", "A32"]) expect(dests).toContain(c);
     // Ray +rank/inward: 6A(rail), bounce, 7B, 8C — the ray then dies at 9D,
     // which holds seat 2's KING: blocked, and never a capture target (R12).
-    for (const c of ["6A", "7B"]) expect(dests).toContain(c);
-    expect(dests).not.toContain("9D");
+    for (const c of ["A6", "B7"]) expect(dests).toContain(c);
+    expect(dests).not.toContain("D9");
     // Ray −rank/inward: 4A, bounce, 3B, 2C, 1D
-    for (const c of ["4A", "3B", "1D"]) expect(dests).toContain(c);
+    for (const c of ["A4", "B3", "D1"]) expect(dests).toContain(c);
   });
 
   it("cannot bounce twice: nothing beyond the second rail contact", () => {
     const dests = destinations(loneBishop(), "5B");
     // Each ray ends at its second rail contact; continuing would need a
     // second bounce (§5.4: cannot bounce more than once per move).
-    expect(dests).not.toContain("11B"); // past 10A on the outward ray
-    expect(dests).not.toContain("31B"); // past 32A
-    expect(dests).not.toContain("10C"); // past 9D on the inward-start ray
+    expect(dests).not.toContain("B11"); // past 10A on the outward ray
+    expect(dests).not.toContain("B31"); // past 32A
+    expect(dests).not.toContain("C10"); // past 9D on the inward-start ray
   });
 
   it("never leaves its color chain (§5.4: a bishop never leaves its starting color)", () => {
@@ -94,9 +94,9 @@ describe("banana curl geometry (§5.4)", () => {
       activeSeat: 1,
     });
     const dests = destinations(state, "5B");
-    expect(dests).toContain("6C");
-    expect(dests).not.toContain("7D"); // friendly
-    expect(dests).not.toContain("9B"); // that ray never bounced
+    expect(dests).toContain("C6");
+    expect(dests).not.toContain("D7"); // friendly
+    expect(dests).not.toContain("B9"); // that ray never bounced
   });
 
   it("cannot bounce off another piece (§5.4)", () => {
@@ -112,7 +112,7 @@ describe("banana curl geometry (§5.4)", () => {
     const dests = destinations(state, "5B");
     // Inward +rank ray is dead at 6A: its post-bounce squares must not exist
     // from THAT ray. 7B is only reachable via that ray — must be absent.
-    expect(dests).not.toContain("7B");
+    expect(dests).not.toContain("B7");
   });
 
 });

@@ -4,11 +4,10 @@
  *
  *   token   = PIECE FROM SEP TO SUFFIXES
  *   PIECE   = K Q R B N P        (P required in canonical form)
- *   FROM/TO = rank-first coordinates, e.g. 32D, 1A   (§2.2; the spec's §3.4
- *             examples are file-first — coordinate ORDER is awaiting the
- *             inventor's ruling. Emission is isolated behind
- *             formatSquareToken and the parser accepts BOTH orders, so the
- *             ruling lands as a one-line change.)
+ *   FROM/TO = file-first coordinates, e.g. D32, A1 — founder's 2026-07-03
+ *             placeholder ruling, matching the spec's §3.4 examples (§2.2
+ *             prose is rank-first; a re-ruling flips geometry.formatSquare,
+ *             the single emit point — the parser accepts BOTH orders).
  *   SEP     = "-" quiet | "x" capture
  *   SUFFIXES, in canonical order:
  *     =Q =R =B =N   promotion (§8.3; the promoted piece's halo is implicit)
@@ -74,9 +73,9 @@ import { SEATS } from "./geometry.js";
 // ---------------------------------------------------------------------------
 
 /**
- * Emit a square token. Rank-first ("32D") pending the inventor's ruling on
- * §3.3-prose vs §3.4-examples; to flip to file-first ("D32"), change ONLY
- * this function's return expression.
+ * Emit a square token. File-first ("D32") per the founder's 2026-07-03
+ * placeholder ruling — the order is decided by geometry's formatSquare (the
+ * single emit point); a future re-ruling flips there, not here.
  */
 export function formatSquareToken(square: Square): string {
   return formatSquare(square);
@@ -87,8 +86,6 @@ export function formatSquareToken(square: Square): string {
  * starts with a digit, file-first starts with a file letter A–D.
  */
 export function parseSquareToken(text: string): Square {
-  const fileFirst = text.trim().match(/^([A-Da-d])([1-9][0-9]?)$/u);
-  if (fileFirst) return parseSquare(`${fileFirst[2]}${fileFirst[1]}`);
   return parseSquare(text);
 }
 

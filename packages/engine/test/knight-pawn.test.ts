@@ -17,7 +17,7 @@ describe("knight (§5.5)", () => {
     const dests = destinations(state, "1B");
     // From 1B (rank 1): ±1/±2 and ±2/±1 with wrap; 32D holds seat 1's own
     // king (auto-placed), so that square is excluded.
-    expect(dests).toEqual(["2D", "31A", "31C", "3A", "3C"].sort());
+    expect(dests).toEqual(["D2", "A31", "C31", "A3", "C3"].sort());
   });
 
   it("clips at the rails: never jumps into or across the center or outside D", () => {
@@ -26,7 +26,7 @@ describe("knight (§5.5)", () => {
       activeSeat: 1,
     });
     // From file D, +2/-2 file offsets are gone; only inward jumps survive.
-    expect(destinations(state, "2D")).toEqual(["1B", "32C", "3B", "4C"].sort());
+    expect(destinations(state, "2D")).toEqual(["B1", "C32", "B3", "C4"].sort());
   });
 
   it("a non-haloed knight jumping across its own meridian evaporates (§6.3)", () => {
@@ -47,7 +47,7 @@ describe("pawn direction and advance (§2.8, §5.7)", () => {
       pieces: [{ at: "2B", kind: "P", seat: 1 }],
       activeSeat: 1,
     });
-    expect(destinations(state, "2B")).toEqual(["3B", "4B"].sort());
+    expect(destinations(state, "2B")).toEqual(["B3", "B4"].sort());
   });
 
   it("counterclockwise-side pawns advance the other way", () => {
@@ -55,7 +55,7 @@ describe("pawn direction and advance (§2.8, §5.7)", () => {
       pieces: [{ at: "31B", kind: "P", seat: 1 }],
       activeSeat: 1,
     });
-    expect(destinations(state, "31B")).toEqual(["30B", "29B"].sort());
+    expect(destinations(state, "31B")).toEqual(["B30", "B29"].sort());
   });
 
   it("direction is anchored to the pawn's ORIGIN, not its current square", () => {
@@ -65,7 +65,7 @@ describe("pawn direction and advance (§2.8, §5.7)", () => {
       pieces: [{ at: "6B", kind: "P", seat: 1, origin: "2B" }],
       activeSeat: 1,
     });
-    expect(destinations(state, "6B")).toEqual(["7B"]); // moved: no double
+    expect(destinations(state, "6B")).toEqual(["B7"]); // moved: no double
   });
 
   it("no double step once moved; forward blocked by any piece", () => {
@@ -90,7 +90,7 @@ describe("pawn direction and advance (§2.8, §5.7)", () => {
       ],
       activeSeat: 1,
     });
-    expect(destinations(state, "2B")).toEqual(["3A", "3C"].sort());
+    expect(destinations(state, "2B")).toEqual(["A3", "C3"].sort());
     expect(mv(state, "2B", "3A").captures).toBe(parseSquare("3A"));
   });
 
@@ -102,7 +102,7 @@ describe("pawn direction and advance (§2.8, §5.7)", () => {
       ],
       activeSeat: 1,
     });
-    expect(destinations(state, "2B")).toEqual(["3B", "4B"].sort());
+    expect(destinations(state, "2B")).toEqual(["B3", "B4"].sort());
   });
 });
 

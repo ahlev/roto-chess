@@ -69,12 +69,12 @@ function randomTurns(seed: number, maxTurns: number): Turn[] {
 }
 
 describe("token shape", () => {
-  it("canonical tokens are rank-first with P required (R10)", () => {
+  it("canonical tokens are file-first with P required (R10)", () => {
     const state = buildState({
       pieces: [{ at: "2B", kind: "P", seat: 1 }],
       activeSeat: 1,
     });
-    expect(moveToToken(state, mv(state, "2B", "3B"))).toBe("P2B-3B");
+    expect(moveToToken(state, mv(state, "2B", "3B"))).toBe("PB2-B3");
   });
 
   it("captures use x; halo/evaporation/avenger suffix correctly", () => {
@@ -85,7 +85,7 @@ describe("token shape", () => {
       ],
       activeSeat: 1,
     });
-    expect(moveToToken(state, mv(state, "5B", "5C"))).toBe("R5Bx5C*");
+    expect(moveToToken(state, mv(state, "5B", "5C"))).toBe("RB5xC5*");
   });
 
   it("evaporating capture carries BOTH marks: halo earned (*), then evaporated (†)", () => {
@@ -96,7 +96,7 @@ describe("token shape", () => {
       ],
       activeSeat: 1,
     });
-    expect(moveToToken(state, mv(state, "2B", "32C"))).toBe("N2Bx32C*†");
+    expect(moveToToken(state, mv(state, "2B", "32C"))).toBe("NB2xC32*†");
   });
 
   it("castles are O-O and O-O-O", () => {
@@ -242,29 +242,31 @@ describe("game layer", () => {
   it("a corrupt record fails loudly, not silently", () => {
     const turns = randomTurns(13, 6);
     const text = serializeGame({ turns });
-    const corrupted = text.replace(/P(\d+)B-/u, "P$1C-");
+    const corrupted = text.replace(/PB(\d+)-/u, "PC$1-");
+    expect(corrupted).not.toBe(text);
     expect(() => parseGame(corrupted)).toThrow();
   });
 });
 
-describe("square-token order (unresolved upstream — parser accepts both)", () => {
+describe("square-token order (parser accepts both)", () => {
   it("rank-first and file-first tokens parse to the same square", () => {
     expect(parseSquareToken("32D")).toBe(parseSquareToken("D32"));
     expect(parseSquareToken("1A")).toBe(parseSquareToken("A1"));
     expect(parseSquareToken("17C")).toBe(parseSquareToken("C17"));
-    // Emission is currently rank-first (one place to flip when ruled):
-    expect(formatSquareToken(parseSquareToken("D32"))).toBe("32D");
+    // Emission is file-first per the founder's 2026-07-03 placeholder ruling
+    // (one place to flip if re-ruled):
+    expect(formatSquareToken(parseSquareToken("32D"))).toBe("D32");
   });
 
-  it("a whole game rewritten file-first replays identically", () => {
+  it("a whole game rewritten rank-first replays identically", () => {
     const turns = randomTurns(31, 24);
     const text = serializeGame({ turns });
-    const fileFirst = text.replace(
-      /([KQRBNP])([0-9]{1,2})([A-D])([-x])([0-9]{1,2})([A-D])/gu,
+    const rankFirst = text.replace(
+      /([KQRBNP])([A-D])([0-9]{1,2})([-x])([A-D])([0-9]{1,2})/gu,
       "$1$3$2$4$6$5",
     );
-    expect(fileFirst).not.toBe(text);
-    const parsed = parseGame(fileFirst);
+    expect(rankFirst).not.toBe(text);
+    const parsed = parseGame(rankFirst);
     expect(parsed.turns.length).toBe(turns.length);
     expect(parsed.finalState).toEqual(playGame(turns).finalState);
   });
@@ -328,8 +330,8 @@ describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
       pieces: [{ at: "2B", kind: "P", seat: 1 }],
       activeSeat: 1,
     });
-    expect(moveToToken(state, mv(state, "2B", "3B"))).toBe("P2B-3B");
-    expect(moveToDisplay(state, mv(state, "2B", "3B"))).toBe("3B");
+    expect(moveToToken(state, mv(state, "2B", "3B"))).toBe("PB2-B3");
+    expect(moveToDisplay(state, mv(state, "2B", "3B"))).toBe("B3");
   });
 
   it("pawn captures keep the x", () => {
@@ -340,7 +342,7 @@ describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
       ],
       activeSeat: 1,
     });
-    expect(moveToDisplay(state, mv(state, "2B", "3C"))).toBe("x3C");
+    expect(moveToDisplay(state, mv(state, "2B", "3C"))).toBe("xC3");
   });
 
   it("a non-pawn with a unique reacher keeps its letter, drops the from-square", () => {
@@ -348,7 +350,7 @@ describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
       pieces: [{ at: "2B", kind: "N", seat: 1 }],
       activeSeat: 1,
     });
-    expect(moveToDisplay(state, mv(state, "2B", "4C"))).toBe("N4C");
+    expect(moveToDisplay(state, mv(state, "2B", "4C"))).toBe("NC4");
   });
 
   it("ambiguity retains the from-square (which then names the piece — letter drops)", () => {
@@ -360,10 +362,10 @@ describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
       activeSeat: 1,
     });
     // Both rooks can legally reach 7B — the from-square must stay.
-    expect(moveToDisplay(state, mv(state, "5B", "7B"))).toBe("5B-7B");
+    expect(moveToDisplay(state, mv(state, "5B", "7B"))).toBe("B5-B7");
     // (The 9B rook passes display rank 8 — an opposing back rank — so its
     // §6.2 halo mark rides along even on the abbreviated form.)
-    expect(moveToDisplay(state, mv(state, "9B", "7B"))).toBe("9B-7B*");
+    expect(moveToDisplay(state, mv(state, "9B", "7B"))).toBe("B9-B7*");
   });
 
   it("suffix annotations survive abbreviation", () => {
@@ -374,7 +376,7 @@ describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
       ],
       activeSeat: 1,
     });
-    expect(moveToDisplay(halo, mv(halo, "5B", "5C"))).toBe("Rx5C*");
+    expect(moveToDisplay(halo, mv(halo, "5B", "5C"))).toBe("RxC5*");
     const evap = buildState({
       pieces: [
         { at: "2B", kind: "N", seat: 1 },
@@ -382,7 +384,7 @@ describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
       ],
       activeSeat: 1,
     });
-    expect(moveToDisplay(evap, mv(evap, "2B", "32C"))).toBe("Nx32C*†");
+    expect(moveToDisplay(evap, mv(evap, "2B", "32C"))).toBe("NxC32*†");
   });
 
   it("turnToDisplay pairs opening submoves with a spaced & and carries the canonical form", () => {
@@ -409,7 +411,7 @@ describe("validateGameText (archive-grade structured validation)", () => {
   it("an illegal move reports ply, token, and legal alternatives", () => {
     const turns = randomTurns(13, 24);
     const text = serializeGame({ turns });
-    const corrupted = text.replace(/([KQRBN])(\d{1,2})B-/u, "$1$2C-");
+    const corrupted = text.replace(/([KQRBN])B(\d{1,2})-/u, "$1C$2-");
     expect(corrupted).not.toBe(text);
     const v = validateGameText(corrupted);
     expect(v.issues.length).toBe(1);
@@ -445,7 +447,7 @@ describe("engine-generated spec examples (for the docs)", () => {
     }
     // Every token: two &-joined canonical moves.
     for (const token of tokens) {
-      expect(token).toMatch(/^[KQRBNP]\d+[A-D][-x]\d+[A-D].*&[KQRBNP]\d+[A-D][-x]\d+[A-D]/u);
+      expect(token).toMatch(/^[KQRBNP][A-D]\d+[-x][A-D]\d+.*&[KQRBNP][A-D]\d+[-x][A-D]\d+/u);
     }
   });
 });

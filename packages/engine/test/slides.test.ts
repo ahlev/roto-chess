@@ -16,13 +16,13 @@ describe("rook wraparound sliding (§5.6)", () => {
       activeSeat: 1,
     });
     const dests = destinations(state, "5B");
-    const fileB = dests.filter((c) => c.endsWith("B"));
+    const fileB = dests.filter((c) => c.startsWith("B"));
     expect(fileB).toHaveLength(31);
-    expect(dests).not.toContain("5B"); // no 32-step null move
+    expect(dests).not.toContain("B5"); // no 32-step null move
     // Radial reach on its rank:
-    expect(dests).toContain("5A");
-    expect(dests).toContain("5C");
-    expect(dests).toContain("5D");
+    expect(dests).toContain("A5");
+    expect(dests).toContain("C5");
+    expect(dests).toContain("D5");
   });
 
   it("is blocked by a friendly piece at the 32↔1 junction", () => {
@@ -35,9 +35,9 @@ describe("rook wraparound sliding (§5.6)", () => {
     });
     const dests = destinations(state, "5B");
     // Clockwise it runs 6B..32B; counterclockwise 4B..2B; 1B is friendly.
-    expect(dests).toContain("32B");
-    expect(dests).toContain("2B");
-    expect(dests).not.toContain("1B");
+    expect(dests).toContain("B32");
+    expect(dests).toContain("B2");
+    expect(dests).not.toContain("B1");
   });
 
   it("captures an enemy at the junction from either side", () => {
@@ -140,10 +140,10 @@ describe("queen (§5.3)", () => {
       activeSeat: 1,
     });
     const dests = destinations(state, "5B");
-    expect(dests).toContain("20B"); // wrapped far side of the ring
-    expect(dests).toContain("5A");
-    expect(dests).toContain("6C"); // diagonal
-    expect(dests).toContain("7D"); // diagonal to the outer rail
+    expect(dests).toContain("B20"); // wrapped far side of the ring
+    expect(dests).toContain("A5");
+    expect(dests).toContain("C6"); // diagonal
+    expect(dests).toContain("D7"); // diagonal to the outer rail
     // A bounce continuation like 8C (via 6C,7D then reflecting) must NOT
     // exist as a queen diagonal — queens do not banana-curl.
     const diagTo8C = legalMovesFrom(state, parseSquare("5B")).filter(

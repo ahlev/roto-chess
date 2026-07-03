@@ -15,7 +15,7 @@ import { BRAND } from "@/config/brand";
 const BEATS = [
   {
     title: "This is a chessboard bent into a ring.",
-    body: "Four files run A (inner) to D (outer); thirty-two ranks run clockwise, and rank 32 borders rank 1. Tap the rook — its file-wise slide wraps straight through the seam. Coordinates are rank-first: 32D, 1A. They never change, no matter how the board turns.",
+    body: "Four files run A (inner) to D (outer); thirty-two ranks run clockwise, and rank 32 borders rank 1. Tap the rook — its file-wise slide wraps straight through the seam. Coordinates are letter-first: D32, A1. They never change, no matter how the board turns.",
   },
   {
     title: "Four armies. Two teams. Partners opposite.",

@@ -193,10 +193,14 @@ describe("promotion table (§5.7) — all 8 rows transcribed verbatim", () => {
 });
 
 describe("display notation boundary (§2.2)", () => {
-  it("formats the rulebook's own examples", () => {
-    expect(formatSquare(squareOf(d(32), 3))).toBe("32D");
-    expect(formatSquare(squareOf(d(1), 0))).toBe("1A");
-    expect(formatSquare(squareOf(d(17), 2))).toBe("17C");
+  // Founder's 2026-07-03 placeholder ruling: emission is FILE-FIRST ("D32"),
+  // matching the rulebook §3.3 / TDD §3.4 move examples. (§2.2 prose is
+  // rank-first; parseSquare accepts BOTH orders so fixtures and archives
+  // survive a re-ruling.) formatSquare is the single emit point.
+  it("formats the rulebook's example squares file-first", () => {
+    expect(formatSquare(squareOf(d(32), 3))).toBe("D32");
+    expect(formatSquare(squareOf(d(1), 0))).toBe("A1");
+    expect(formatSquare(squareOf(d(17), 2))).toBe("C17");
   });
 
   it("parses what it formats, for all 128 squares", () => {
@@ -205,14 +209,28 @@ describe("display notation boundary (§2.2)", () => {
     }
   });
 
+  it("round-trips the rank-first order too, for all 128 squares", () => {
+    for (let sq = 0; sq < 128; sq++) {
+      const fileFirst = formatSquare(sq); // e.g. "D32"
+      const rankFirst = fileFirst.slice(1) + fileFirst[0]; // e.g. "32D"
+      expect(parseSquare(rankFirst), rankFirst).toBe(sq);
+    }
+  });
+
   it("rejects malformed coordinates", () => {
-    for (const bad of ["33D", "0A", "5E", "D5", "", "12", "1AA"]) {
+    for (const bad of [
+      "33D", "D33", // rank out of range, both orders
+      "0A", "D0",   // rank 0, both orders
+      "5E", "E5",   // no file E, both orders
+      "", "12", "D", "1AA", "A1A",
+    ]) {
       expect(() => parseSquare(bad), bad).toThrow();
     }
   });
 
-  it("accepts lowercase files", () => {
+  it("accepts lowercase files in either order", () => {
     expect(parseSquare("32d")).toBe(squareOf(d(32), 3));
+    expect(parseSquare("d32")).toBe(squareOf(d(32), 3));
   });
 });
 

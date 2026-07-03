@@ -185,9 +185,9 @@ describe("debug rendering", () => {
 
   it("listPieces includes the four kings on their §2.7 squares", () => {
     const listed = listPieces(initialState());
-    expect(listed).toContain("1K@32D");
-    expect(listed).toContain("2K@9D");
-    expect(listed).toContain("3K@16D");
-    expect(listed).toContain("4K@25D");
+    expect(listed).toContain("1K@D32");
+    expect(listed).toContain("2K@D9");
+    expect(listed).toContain("3K@D16");
+    expect(listed).toContain("4K@D25");
   });
 });

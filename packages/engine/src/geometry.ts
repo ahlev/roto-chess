@@ -266,17 +266,32 @@ export function promotionRank(seat: Seat, originRank: Rank): Rank {
 
 export const FILE_LETTERS = "ABCD";
 
-/** Internal square → display coordinate, e.g. 32D, 1A (§2.2: rank first). */
+/**
+ * Internal square → display coordinate, e.g. D32, A1 — file-first per the
+ * founder's 2026-07-03 placeholder ruling (matches the rulebook §3.3 / TDD
+ * §3.4 move EXAMPLES; rulebook §2.2 prose says rank-first, so this may flip
+ * again when the inventor rules). This is the ONE emit point.
+ */
 export function formatSquare(square: Square): string {
-  return `${rankOf(square) + 1}${FILE_LETTERS[fileOf(square)]}`;
+  return `${FILE_LETTERS[fileOf(square)]}${rankOf(square) + 1}`;
 }
 
-/** Display coordinate → internal square. Throws on malformed input. */
+/**
+ * Display coordinate → internal square. Accepts BOTH orders (file-first
+ * "D32" and rank-first "32D" — unambiguous by leading character) so code
+ * fixtures and archived notation survive the pending coordinate ruling.
+ * Throws on malformed input.
+ */
 export function parseSquare(text: string): Square {
-  const m = text.trim().match(/^([1-9][0-9]?)([A-Da-d])$/);
+  const t = text.trim();
+  const m =
+    t.match(/^([1-9][0-9]?)([A-Da-d])$/) ?? t.match(/^([A-Da-d])([1-9][0-9]?)$/);
   if (!m) throw new Error(`Invalid square: "${text}"`);
-  const rank = Number(m[1]);
+  const digitLed = /^[0-9]/.test(m[1] as string);
+  const rankPart = digitLed ? (m[1] as string) : (m[2] as string);
+  const filePart = digitLed ? (m[2] as string) : (m[1] as string);
+  const rank = Number(rankPart);
   if (rank < 1 || rank > RANK_COUNT) throw new Error(`Invalid rank: "${text}"`);
-  const file = FILE_LETTERS.indexOf((m[2] as string).toUpperCase());
+  const file = FILE_LETTERS.indexOf(filePart.toUpperCase());
   return squareOf(rank - 1, file);
 }
