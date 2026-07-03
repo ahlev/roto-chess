@@ -340,6 +340,61 @@ describe("RLS — adversarial", () => {
   });
 });
 
+describe("game deletion — creator-only, cascades to children", () => {
+  it("deleting a game removes its players/moves/actions/game-chat but keeps the table", async () => {
+    const { gameId, tableId } = await createGame();
+    await joinAll(gameId);
+    // Play one turn so a moves row exists.
+    const state = initialState();
+    const first = legalMoves(state)[0] as Move;
+    const second = legalSecondSubmoves(state, first)[0] as Move;
+    const prepared = prepareTurn(serializeState(state), 0, 1, toRef([first, second]));
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    await callSubmitTurn(gameId, 0, 1, prepared);
+    // A table-level chat message (no game_id) and a game-scoped one.
+    await asUser(USERS.north, async () => {
+      await db.query(
+        `insert into chat_messages (table_id, user_id, body) values ($1, $2, 'series chatter')`,
+        [tableId, USERS.north],
+      );
+      await db.query(
+        `insert into chat_messages (table_id, game_id, user_id, body) values ($1, $2, $3, 'this game only')`,
+        [tableId, gameId, USERS.north],
+      );
+    });
+
+    // The route's authorization is created_by === caller; the DELETE itself
+    // is a plain cascade (service role). Exercise the cascade directly.
+    await db.query(`delete from games where id = $1`, [gameId]);
+
+    const countOf = async (sql: string, arg: string) =>
+      (await db.query<{ n: number }>(sql, [arg])).rows[0]!.n;
+    expect(
+      await countOf(`select count(*)::int as n from games where id = $1`, gameId),
+    ).toBe(0);
+    expect(
+      await countOf(`select count(*)::int as n from game_players where game_id = $1`, gameId),
+    ).toBe(0);
+    expect(
+      await countOf(`select count(*)::int as n from moves where game_id = $1`, gameId),
+    ).toBe(0);
+    expect(
+      await countOf(`select count(*)::int as n from chat_messages where game_id = $1`, gameId),
+    ).toBe(0);
+    // The table and its series-level (game_id null) chat survive.
+    expect(
+      await countOf(`select count(*)::int as n from tables where id = $1`, tableId),
+    ).toBe(1);
+    expect(
+      await countOf(
+        `select count(*)::int as n from chat_messages where table_id = $1 and game_id is null`,
+        tableId,
+      ),
+    ).toBe(1);
+  });
+});
+
 describe("submit_turn — ordering authority", () => {
   it("racing double-submit: exactly one winner, loser gets TURN_CONFLICT", async () => {
     const { gameId } = await createGame();
