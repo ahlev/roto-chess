@@ -11,8 +11,19 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const redirect = url.searchParams.get("redirect") ?? "/app";
-  // Only ever redirect within the app.
-  const safeRedirect = redirect.startsWith("/") ? redirect : "/app";
+  // Only ever redirect within the app: reject protocol-relative (//evil.com)
+  // and backslash-tricked (/\evil.com) forms, then verify the resolved
+  // origin matches ours.
+  let safeRedirect = "/app";
+  if (redirect.startsWith("/") && !redirect.startsWith("//") && !redirect.startsWith("/\\")) {
+    try {
+      if (new URL(redirect, url.origin).origin === url.origin) {
+        safeRedirect = redirect;
+      }
+    } catch {
+      // keep default
+    }
+  }
 
   if (code) {
     const supabase = await authedServerClient();

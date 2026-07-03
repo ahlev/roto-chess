@@ -20,7 +20,6 @@ interface CreateBody {
   seat?: 1 | 2 | 3 | 4;
   /** Rematch: create the next game inside this table. */
   tableId?: string;
-  rotateSeats?: boolean;
 }
 
 const WEEKDAYS = [
@@ -66,11 +65,19 @@ export async function POST(request: Request) {
     }
     const { data: last } = await supabase
       .from("games")
-      .select("game_no")
+      .select("game_no, status")
       .eq("table_id", tableId)
       .order("game_no", { ascending: false })
       .limit(1)
       .single();
+    // "Run it back" starts when the previous episode has ENDED — no piles
+    // of parallel lobbies inside one table.
+    if (last && ["lobby", "active"].includes(last.status as string)) {
+      return NextResponse.json(
+        { error: "This table already has a game in progress" },
+        { status: 409 },
+      );
+    }
     gameNo = (last?.game_no ?? 0) + 1;
   } else {
     const name =
@@ -106,9 +113,15 @@ export async function POST(request: Request) {
       .select("id, join_code")
       .single();
     if (!error && game) {
-      await supabase
+      const { error: seatErr } = await supabase
         .from("game_players")
         .insert({ game_id: game.id as string, seat, user_id: userId });
+      if (seatErr) {
+        return NextResponse.json(
+          { error: "Could not seat the creator" },
+          { status: 500 },
+        );
+      }
       return NextResponse.json({
         gameId: game.id as string,
         tableId,

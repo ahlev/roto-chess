@@ -1,9 +1,10 @@
 /**
  * The authority's pure core: validate a client TurnRef against the stored
- * snapshot and produce everything submit_turn needs. No I/O — unit-tested
- * directly and driven against the real schema in the PGlite harness.
- * The engine decides legality; Postgres decides ordering.
+ * snapshot and produce everything submit_turn needs. No I/O beyond the
+ * CSPRNG — unit-tested directly and driven against the real schema in the
+ * PGlite harness. The engine decides legality; Postgres decides ordering.
  */
+import { randomInt } from "node:crypto";
 import {
   applyTurn,
   deserializeState,
@@ -85,10 +86,13 @@ export function prepareTurn(
 /** Join codes: 5 chars from an unambiguous alphabet (no 0/O/1/I/L). */
 const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
-export function generateJoinCode(rand: () => number = Math.random): string {
+/** CSPRNG by default — V8's Math.random is state-recoverable. */
+export function generateJoinCode(
+  pick: (bound: number) => number = randomInt,
+): string {
   let code = "";
   for (let i = 0; i < 5; i++) {
-    code += CODE_ALPHABET[Math.floor(rand() * CODE_ALPHABET.length)];
+    code += CODE_ALPHABET[pick(CODE_ALPHABET.length)];
   }
   return code;
 }

@@ -12,11 +12,6 @@ export function supabaseAnonKey(): string | null {
   return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null;
 }
 
-/** Server-only master key. NEVER exposed under NEXT_PUBLIC_. */
-export function supabaseServiceRoleKey(): string | null {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
-}
-
 export function isDemoMode(): boolean {
   return !supabaseUrl() || !supabaseAnonKey();
 }

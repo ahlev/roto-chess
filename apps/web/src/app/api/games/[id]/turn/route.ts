@@ -36,6 +36,17 @@ export async function POST(
   }
 
   const supabase = serviceClient();
+  // Membership first: non-participants learn nothing about the game's
+  // existence or status (404 for both "no game" and "not yours").
+  const { data: seatRow } = await supabase
+    .from("game_players")
+    .select("seat")
+    .eq("game_id", gameId)
+    .eq("user_id", userId)
+    .single();
+  if (!seatRow) {
+    return NextResponse.json({ error: "No such game" }, { status: 404 });
+  }
   const { data: game } = await supabase
     .from("games")
     .select("id, status, state, current_ply, active_seat")
@@ -46,15 +57,6 @@ export async function POST(
   }
   if (game.status !== "active") {
     return NextResponse.json({ error: "Game is not active" }, { status: 409 });
-  }
-  const { data: seatRow } = await supabase
-    .from("game_players")
-    .select("seat")
-    .eq("game_id", gameId)
-    .eq("user_id", userId)
-    .single();
-  if (!seatRow) {
-    return NextResponse.json({ error: "Not a participant" }, { status: 403 });
   }
 
   const prepared = prepareTurn(

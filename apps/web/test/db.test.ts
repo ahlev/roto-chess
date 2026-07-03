@@ -285,6 +285,50 @@ describe("RLS — adversarial", () => {
     });
   });
 
+  it("game_actions: user_id spoofing, bogus kinds, and ply forgery all fail", async () => {
+    // Spoofing another user's action:
+    await asUser(USERS.east, async () => {
+      await expect(
+        db.query(
+          `insert into game_actions (game_id, user_id, kind, ply_at)
+           values ('${gameId}', '${USERS.north}', 'draw_propose', 0)`,
+        ),
+      ).rejects.toThrow();
+      // Bogus kind:
+      await expect(
+        db.query(
+          `insert into game_actions (game_id, user_id, kind, ply_at)
+           values ('${gameId}', '${USERS.east}', 'declare_victory', 0)`,
+        ),
+      ).rejects.toThrow();
+    });
+    // Non-participant can't act at all:
+    await asUser(USERS.outsider, async () => {
+      await expect(
+        db.query(
+          `insert into game_actions (game_id, user_id, kind, ply_at)
+           values ('${gameId}', '${USERS.outsider}', 'draw_propose', 0)`,
+        ),
+      ).rejects.toThrow();
+    });
+    // ply_at forgery is neutralized: the trigger pins it to current_ply.
+    await asUser(USERS.east, async () => {
+      await db.query(
+        `insert into game_actions (game_id, user_id, kind, ply_at)
+         values ('${gameId}', '${USERS.east}', 'draw_propose', 2147483647)`,
+      );
+    });
+    const pinned = await db.query<{ ply_at: number }>(
+      `select ply_at from game_actions where game_id = '${gameId}' and kind = 'draw_propose'`,
+    );
+    const currentPly = (
+      await db.query<{ current_ply: number }>(
+        `select current_ply from games where id = '${gameId}'`,
+      )
+    ).rows[0]!.current_ply;
+    expect(pinned.rows[0]!.ply_at).toBe(currentPly);
+  });
+
   it("clients cannot call submit_turn", async () => {
     await asUser(USERS.north, async () => {
       await expect(

@@ -139,7 +139,7 @@ create trigger games_touch before update on games
 -- ---------------------------------------------------------------------------
 create or replace function is_game_participant(p_game_id uuid)
 returns boolean language sql security definer stable
-set search_path = public as $$
+set search_path = public, pg_temp as $$
   select exists (
     select 1 from game_players
     where game_id = p_game_id and user_id = auth.uid()
@@ -148,7 +148,7 @@ $$;
 
 create or replace function is_table_participant(p_table_id uuid)
 returns boolean language sql security definer stable
-set search_path = public as $$
+set search_path = public, pg_temp as $$
   select exists (
     select 1
     from game_players gp
@@ -168,8 +168,19 @@ alter table moves         enable row level security;
 alter table game_actions  enable row level security;
 alter table chat_messages enable row level security;
 
+-- Profiles are visible to yourself and to people who share a game with you
+-- — never to arbitrary signed-up strangers (enumeration guard).
 create policy profiles_select on profiles
-  for select to authenticated using (true);
+  for select to authenticated
+  using (
+    id = auth.uid()
+    or exists (
+      select 1
+      from game_players me
+      join game_players them on them.game_id = me.game_id
+      where me.user_id = auth.uid() and them.user_id = profiles.id
+    )
+  );
 create policy profiles_update_own on profiles
   for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 create policy profiles_insert_own on profiles
@@ -203,6 +214,27 @@ create policy game_actions_propose on game_actions
   );
 -- Resolution (actually ending a game) is server-side only.
 
+-- ply_at is SERVER truth, never client input: pin it to the game's current
+-- ply at insert time so proposals can neither be immortalized (huge ply_at
+-- dodging the voiding delete) nor backdated. Also require a live game.
+create or replace function pin_action_ply() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_ply int;
+  v_status text;
+begin
+  select current_ply, status into v_ply, v_status
+    from games where id = new.game_id;
+  if v_status is distinct from 'active' then
+    raise exception 'GAME_NOT_ACTIVE';
+  end if;
+  new.ply_at := v_ply;
+  return new;
+end $$;
+
+create trigger game_actions_pin_ply before insert on game_actions
+  for each row execute function pin_action_ply();
+
 create policy chat_select on chat_messages
   for select to authenticated
   using (
@@ -225,7 +257,19 @@ create policy chat_select on chat_messages
   );
 create policy chat_insert on chat_messages
   for insert to authenticated
-  with check (user_id = auth.uid() and is_table_participant(table_id));
+  with check (
+    user_id = auth.uid()
+    and is_table_participant(table_id)
+    -- A move anchor must reference a game of THIS table (thread integrity;
+    -- also keeps team_only routing inside the right seat map).
+    and (
+      game_id is null
+      or exists (
+        select 1 from games g
+        where g.id = game_id and g.table_id = chat_messages.table_id
+      )
+    )
+  );
 
 -- ---------------------------------------------------------------------------
 -- submit_turn — the single serialization point. The route handler has
@@ -239,8 +283,16 @@ create or replace function submit_turn(
   p_new_active_seat smallint, p_new_status text,
   p_result text, p_result_reason text
 ) returns void language plpgsql security definer
-set search_path = public as $$
+set search_path = public, pg_temp as $$
 begin
+  -- Defense in depth: even the service role must obey shape invariants.
+  if p_new_status not in ('active','complete') then
+    raise exception 'BAD_STATUS';
+  end if;
+  if (p_new_status = 'complete') <> (p_result is not null) then
+    raise exception 'RESULT_STATUS_MISMATCH';
+  end if;
+
   update games
      set state         = p_new_state,
          current_ply   = p_expected_ply + 1,
@@ -251,6 +303,7 @@ begin
          last_move_at  = now()
    where id = p_game_id
      and current_ply = p_expected_ply          -- optimistic lock
+     and active_seat = p_seat                  -- only the seat to move
      and status = 'active';
   if not found then
     raise exception 'TURN_CONFLICT';
@@ -273,7 +326,7 @@ revoke execute on function submit_turn from public, anon, authenticated;
 -- ---------------------------------------------------------------------------
 create or replace function join_game(p_code text, p_seat smallint)
 returns uuid language plpgsql security definer
-set search_path = public as $$
+set search_path = public, pg_temp as $$
 declare
   v_game games%rowtype;
   v_inserted int;
@@ -285,7 +338,10 @@ begin
     raise exception 'BAD_SEAT';
   end if;
 
-  select * into v_game from games where join_code = upper(p_code);
+  -- FOR UPDATE serializes concurrent joiners of the same game: without it,
+  -- seats 3 and 4 landing simultaneously can each count three players and
+  -- neither activates — a permanent lobby wedge.
+  select * into v_game from games where join_code = upper(p_code) for update;
   if not found or v_game.status <> 'lobby' then
     raise exception 'GAME_NOT_JOINABLE';
   end if;

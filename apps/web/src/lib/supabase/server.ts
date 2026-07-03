@@ -11,11 +11,16 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import {
-  supabaseAnonKey,
-  supabaseServiceRoleKey,
-  supabaseUrl,
-} from "./env";
+import { supabaseAnonKey, supabaseUrl } from "./env";
+
+/**
+ * The master key accessor lives HERE, behind "server-only" — importing this
+ * module from a client component is a build error, so the key can never be
+ * one refactor away from a client bundle.
+ */
+function supabaseServiceRoleKey(): string | null {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ?? null;
+}
 
 export function serviceClient(): SupabaseClient {
   const url = supabaseUrl();
