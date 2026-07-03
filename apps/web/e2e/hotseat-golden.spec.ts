@@ -97,6 +97,11 @@ test("golden showcase game plays through the UI to checkmate", async ({
     "take the crown",
     { timeout: 15_000 },
   );
+  // The captures tray has logged the fallen: the showcase makes many
+  // captures (and an evaporation), so it must be visible and non-empty.
+  const tray = page.getByTestId("captures-tray");
+  await expect(tray).toBeVisible();
+  expect(await tray.getByRole("listitem").count()).toBeGreaterThan(0);
   await page.screenshot({
     path: testInfo.outputPath("final-desktop.png"),
     fullPage: true,

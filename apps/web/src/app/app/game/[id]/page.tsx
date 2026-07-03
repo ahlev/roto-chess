@@ -13,8 +13,10 @@ import {
   parseGame,
   partnerOf,
   type Seat,
+  type Turn,
 } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
+import { CapturesTray } from "@/components/game/CapturesTray";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { NotationList } from "@/components/game/NotationList";
 import { ChatPanel, type ChatOpenRequest } from "@/components/game/ChatPanel";
@@ -42,6 +44,7 @@ export default function GameRoomPage({
   const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
   const [chatRequest, setChatRequest] = useState<ChatOpenRequest | null>(null);
+  const replay = useReplayedTurns(game.gameId, game.turnsCount, game.lastMoveAt);
 
   const orientation: Seat = game.mySeat ?? 1;
   const openingStep =
@@ -240,24 +243,27 @@ export default function GameRoomPage({
       )}
 
       {!showHistory && game.displayState && (
-        <RotoBoard
-          state={game.displayState}
-          orientation={orientation}
-          selected={game.selected}
-          legalTargets={game.selectionMoves}
-          pendingMove={game.pendingChoice}
-          lastMove={game.lastMoveSquares}
-          interactive={
-            game.gameStatus === "active" &&
-            game.mySeat !== null &&
-            game.state.activeSeat === game.mySeat
-          }
-          onSquareTap={game.tap}
-          className="w-full"
-        />
+        <>
+          <RotoBoard
+            state={game.displayState}
+            orientation={orientation}
+            selected={game.selected}
+            legalTargets={game.selectionMoves}
+            pendingMove={game.pendingChoice}
+            lastMove={game.lastMoveSquares}
+            interactive={
+              game.gameStatus === "active" &&
+              game.mySeat !== null &&
+              game.state.activeSeat === game.mySeat
+            }
+            onSquareTap={game.tap}
+            className="w-full"
+          />
+          <CapturesTray turns={replay.turns ?? []} />
+        </>
       )}
 
-      {showHistory && <HistoryPane gameId={game.gameId} turnsCount={game.turnsCount} />}
+      {showHistory && <HistoryPane turns={replay.turns} failed={replay.failed} />}
 
       {game.gameStatus === "active" &&
         game.mySeat !== null &&
@@ -511,15 +517,19 @@ function ResultSheet({
   );
 }
 
-/** History fetched from the moves table (canonical notation, replayed). */
-function HistoryPane({
-  gameId,
-  turnsCount,
-}: {
-  gameId: string;
-  turnsCount: number;
-}) {
-  const [turns, setTurns] = useState<ReturnType<typeof parseGame>["turns"] | null>(null);
+/**
+ * The canonical turn list, fetched from the moves table and replay-
+ * validated by parseGame. Feeds both the history pane and the captures
+ * tray. Refetches when the ply count moves (remote turns) and when
+ * last_move_at lands from the server (our own just-committed turn — the
+ * optimistic ply bump fires before the move row exists).
+ */
+function useReplayedTurns(
+  gameId: string,
+  turnsCount: number,
+  lastMoveAt: string | null,
+): { turns: readonly Turn[] | null; failed: boolean } {
+  const [turns, setTurns] = useState<readonly Turn[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -542,6 +552,7 @@ function HistoryPane({
           // validate everything.
           const text = `${data.map((d) => d.notation).join(" ")}\n`;
           setTurns(parseGame(text).turns);
+          setFailed(false);
         } catch {
           setFailed(true);
         }
@@ -549,8 +560,19 @@ function HistoryPane({
     return () => {
       cancelled = true;
     };
-  }, [gameId, turnsCount]);
+  }, [gameId, turnsCount, lastMoveAt]);
 
+  return { turns, failed };
+}
+
+/** History from the canonical record (replayed notation, not local state). */
+function HistoryPane({
+  turns,
+  failed,
+}: {
+  turns: readonly Turn[] | null;
+  failed: boolean;
+}) {
   if (failed) {
     return (
       <p className="p-3 text-sm text-[color:var(--danger)]">

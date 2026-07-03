@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { gameToRotoPgn, partnerOf, type Seat } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
+import { CapturesTray } from "@/components/game/CapturesTray";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { CoachNotes } from "@/components/game/CoachNotes";
 import { NotationList } from "@/components/game/NotationList";
@@ -191,23 +192,26 @@ export default function HotseatPage() {
       />
 
       {!showHistory && (
-        <RotoBoard
-          state={game.displayState}
-          orientation={orientation}
-          selected={game.selected}
-          legalTargets={game.selectionMoves}
-          pendingMove={game.pendingChoice}
-          lastMove={game.lastMoveSquares}
-          interactive={game.status.kind === "active"}
-          onSquareTap={game.tap}
-          className="w-full"
-          ceremony={game.turns.length === 0}
-          bloomSquares={game.lastEvents?.halosEarned ?? []}
-          evaporateSquares={game.lastEvents?.evaporations ?? []}
-          ceremonyWinner={
-            game.status.kind === "checkmate" ? game.status.winningTeam : null
-          }
-        />
+        <>
+          <RotoBoard
+            state={game.displayState}
+            orientation={orientation}
+            selected={game.selected}
+            legalTargets={game.selectionMoves}
+            pendingMove={game.pendingChoice}
+            lastMove={game.lastMoveSquares}
+            interactive={game.status.kind === "active"}
+            onSquareTap={game.tap}
+            className="w-full"
+            ceremony={game.turns.length === 0}
+            bloomSquares={game.lastEvents?.halosEarned ?? []}
+            evaporateSquares={game.lastEvents?.evaporations ?? []}
+            ceremonyWinner={
+              game.status.kind === "checkmate" ? game.status.winningTeam : null
+            }
+          />
+          <CapturesTray turns={game.turns} />
+        </>
       )}
 
       {showHistory && (
