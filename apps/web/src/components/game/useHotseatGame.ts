@@ -23,6 +23,7 @@ import {
   type Move,
   type Square,
   type Turn,
+  type TurnEvents,
 } from "@rotochess/engine";
 
 export interface HotseatGame {
@@ -43,6 +44,8 @@ export interface HotseatGame {
   /** The candidate currently highlighted in the confirm bar. */
   pendingChoice: Move | null;
   lastMoveSquares: readonly Square[];
+  /** Events from the most recently applied turn (halos, evaporations…). */
+  lastEvents: TurnEvents | null;
   tap: (square: Square) => void;
   choosePending: (move: Move) => void;
   confirm: () => void;
@@ -61,6 +64,7 @@ export function useHotseatGame(): HotseatGame {
   const [pending, setPending] = useState<readonly Move[]>([]);
   const [pendingChoice, setPendingChoice] = useState<Move | null>(null);
   const [lastMoveSquares, setLastMoveSquares] = useState<readonly Square[]>([]);
+  const [lastEvents, setLastEvents] = useState<TurnEvents | null>(null);
 
   const opening = inOpening(state);
 
@@ -164,6 +168,7 @@ export function useHotseatGame(): HotseatGame {
     setState(result.state);
     setTurns((prev) => [...prev, turn]);
     setLastMoveSquares(touched);
+    setLastEvents(result.events);
     setStagedFirst(null);
     cancel();
   }, [cancel, opening, pendingChoice, stagedFirst, state]);
@@ -177,6 +182,7 @@ export function useHotseatGame(): HotseatGame {
     setTurns([]);
     setStagedFirst(null);
     setLastMoveSquares([]);
+    setLastEvents(null);
     cancel();
   }, [cancel]);
 
@@ -193,6 +199,7 @@ export function useHotseatGame(): HotseatGame {
     pending,
     pendingChoice,
     lastMoveSquares,
+    lastEvents,
     tap,
     choosePending,
     confirm,

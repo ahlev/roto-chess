@@ -9,9 +9,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { gameToRotoPgn, type Seat } from "@rotochess/engine";
+import { gameToRotoPgn, partnerOf, type Seat } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
+import { CoachNotes } from "@/components/game/CoachNotes";
 import { NotationList } from "@/components/game/NotationList";
 import { useHotseatGame } from "@/components/game/useHotseatGame";
 import { BRAND } from "@/config/brand";
@@ -127,6 +128,30 @@ export default function HotseatPage() {
         </div>
       )}
 
+      <CoachNotes
+        notes={[
+          {
+            key: "opening",
+            active: game.opening && game.status.kind === "active",
+            text: "Opening rounds: each turn is TWO moves — one on each side of your meridian — then play passes. The board labels which move you're on.",
+          },
+          {
+            key: "partner-check",
+            active:
+              game.status.kind === "active" &&
+              game.status.inCheck.includes(
+                partnerOf(game.state.activeSeat),
+              ),
+            text: "Your partner is in check. You're not required to help (§7.2) — but you're allowed to. Sometimes the best help is a counterattack.",
+          },
+          {
+            key: "halo",
+            active: (game.lastEvents?.halosEarned.length ?? 0) > 0,
+            text: "Halo earned. That piece may now cross your meridian freely, forever.",
+          },
+        ]}
+      />
+
       {!showHistory && (
         <RotoBoard
           state={game.displayState}
@@ -138,6 +163,12 @@ export default function HotseatPage() {
           interactive={game.status.kind === "active"}
           onSquareTap={game.tap}
           className="w-full"
+          ceremony={game.turns.length === 0}
+          bloomSquares={game.lastEvents?.halosEarned ?? []}
+          evaporateSquares={game.lastEvents?.evaporations ?? []}
+          ceremonyWinner={
+            game.status.kind === "checkmate" ? game.status.winningTeam : null
+          }
         />
       )}
 
