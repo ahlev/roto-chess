@@ -7,6 +7,7 @@
  */
 import { useMemo, useState } from "react";
 import { partnerOf, type Seat } from "@rotochess/engine";
+import { PROPOSAL_WINDOW_PLIES } from "@/lib/game/resolve-actions";
 
 interface ActionRowView {
   user_id: string;
@@ -30,15 +31,23 @@ export interface EndGameActionsProps {
 export function EndGameActions(props: EndGameActionsProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [confirmResign, setConfirmResign] = useState(false);
 
   const live = useMemo(
-    () => props.actions.filter((a) => a.ply_at === props.currentPly),
+    () =>
+      props.actions.filter(
+        (a) =>
+          props.currentPly - a.ply_at < PROPOSAL_WINDOW_PLIES &&
+          a.ply_at <= props.currentPly,
+      ),
     [props.actions, props.currentPly],
   );
   const bySeat = (seat: Seat) =>
     props.seats.find((s) => s.seat === seat)?.userId;
 
-  const resignProposal = live.find((a) => a.kind === "resign_propose");
+  const resignProposalRaw = live.find((a) => a.kind === "resign_propose");
+  const resignDeclined = live.some((a) => a.kind === "resign_decline");
+  const resignProposal = resignDeclined ? undefined : resignProposalRaw;
   const resignProposerSeat = resignProposal
     ? props.seats.find((s) => s.userId === resignProposal.user_id)?.seat
     : undefined;
@@ -46,10 +55,14 @@ export function EndGameActions(props: EndGameActionsProps) {
     resignProposerSeat !== undefined &&
     bySeat(partnerOf(resignProposerSeat)) === props.myUserId;
 
-  const drawProposal = live.find((a) => a.kind === "draw_propose");
+  const drawProposalRaw = live.find((a) => a.kind === "draw_propose");
+  const drawDeclined = live.some((a) => a.kind === "draw_decline");
+  const drawProposal = drawDeclined ? undefined : drawProposalRaw;
   const iAccepted = live.some(
     (a) =>
-      (a.kind === "draw_accept" || a.kind === "draw_propose") &&
+      (a.kind === "draw_accept" ||
+        a.kind === "draw_propose" ||
+        a.kind === "draw_decline") &&
       a.user_id === props.myUserId,
   );
 
@@ -139,15 +152,21 @@ export function EndGameActions(props: EndGameActionsProps) {
               disabled={busy !== null}
               onClick={() => send("abandon_agree")}
             >
-              Close it
+              {/* Honest copy for the absent player's PARTNER: agreeing
+                  concedes the game for the team (P1). */}
+              {bySeat(partnerOf(props.activeSeat)) === props.myUserId
+                ? "Concede for the team"
+                : "Close it"}
             </button>
-            <button
-              className={chip}
-              disabled={busy !== null}
-              onClick={() => send("abandon_object")}
-            >
-              Keep it dormant
-            </button>
+            {bySeat(partnerOf(props.activeSeat)) === props.myUserId && (
+              <button
+                className={chip}
+                disabled={busy !== null}
+                onClick={() => send("abandon_object")}
+              >
+                Keep it dormant
+              </button>
+            )}
           </span>
         </Banner>
       )}
@@ -157,15 +176,37 @@ export function EndGameActions(props: EndGameActionsProps) {
 
       {/* Quiet action row */}
       <div className="flex flex-wrap justify-center gap-2">
-        {!resignProposal && (
+        {!resignProposal && !confirmResign && (
           <button
             className={chip}
             disabled={busy !== null}
-            onClick={() => send("resign_propose")}
+            onClick={() => setConfirmResign(true)}
             title="Your partner will be asked to confirm"
           >
             Tip your king…
           </button>
+        )}
+        {confirmResign && !resignProposal && (
+          <span className="inline-flex items-center gap-2 text-xs text-text-dim">
+            Ask your partner to agree?
+            <button
+              className={chip}
+              disabled={busy !== null}
+              onClick={() => {
+                setConfirmResign(false);
+                void send("resign_propose");
+              }}
+            >
+              Ask them
+            </button>
+            <button
+              className={chip}
+              disabled={busy !== null}
+              onClick={() => setConfirmResign(false)}
+            >
+              Never mind
+            </button>
+          </span>
         )}
         {!drawProposal && (
           <button

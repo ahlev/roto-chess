@@ -42,9 +42,20 @@ describe("team resignation (P2)", () => {
     });
   });
 
-  it("a completed turn voids the proposal (stale ply)", () => {
-    const rows = [at("uN", "resign_propose", 5), at("uS", "resign_confirm", 6)];
-    expect(resolveResignation(rows, 6, seats)).toEqual({ kind: "none" });
+  it("P2 window: the proposal survives intervening turns within one round…", () => {
+    // North proposes at ply 5; South confirms three turns later (ply 8) —
+    // still inside the proposer's round.
+    const rows = [at("uN", "resign_propose", 5), at("uS", "resign_confirm", 8)];
+    expect(resolveResignation(rows, 8, seats)).toEqual({
+      kind: "complete",
+      result: "team_24",
+      reason: "resignation",
+    });
+  });
+
+  it("…and expires when the proposer's next turn arrives (a full round on)", () => {
+    const rows = [at("uN", "resign_propose", 5), at("uS", "resign_confirm", 9)];
+    expect(resolveResignation(rows, 9, seats)).toEqual({ kind: "none" });
   });
 
   it("partner decline kills the proposal", () => {
@@ -116,7 +127,8 @@ describe("abandonment ladder (P1)", () => {
     });
   });
 
-  it("partner objecting → dormant, never a result", () => {
+  it("partner objecting against a real closure attempt → dormant, never a result", () => {
+    // East absent; opponents (N, S) both agree to close; partner West objects.
     const rows = [
       at("uN", "abandon_claim"),
       at("uS", "abandon_agree"),
@@ -124,6 +136,19 @@ describe("abandonment ladder (P1)", () => {
     ];
     expect(resolveAbandonment(rows, 5, seats, 2, staleEnough, now)).toEqual({
       kind: "dormant",
+    });
+  });
+
+  it("nobody can unilaterally force dormancy (H2 regression)", () => {
+    // A single opponent claims then objects to their own claim: no effect.
+    const rows = [at("uN", "abandon_claim"), at("uN", "abandon_object")];
+    expect(resolveAbandonment(rows, 5, seats, 2, staleEnough, now)).toEqual({
+      kind: "none",
+    });
+    // Partner objecting BEFORE the opponents agree: stays active too.
+    const early = [at("uN", "abandon_claim"), at("uW", "abandon_object")];
+    expect(resolveAbandonment(early, 5, seats, 2, staleEnough, now)).toEqual({
+      kind: "none",
     });
   });
 

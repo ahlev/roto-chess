@@ -24,6 +24,15 @@ export const ABANDON_REMINDER_DAYS = 7;
 export const ABANDON_CLOSEABLE_DAYS = 14;
 export const NUDGE_COOLDOWN_HOURS = 24;
 
+/**
+ * P2: a proposal lives until the PROPOSER'S next turn arrives — one full
+ * round, four plies — so partners and opponents can answer on their own
+ * async schedule. (The consultation's draw-expiry "after one full round"
+ * shares the same window.) submit_turn's voiding delete uses the same
+ * constant via the migration.
+ */
+export const PROPOSAL_WINDOW_PLIES = 4;
+
 export interface ActionRow {
   user_id: string;
   kind: string;
@@ -44,9 +53,11 @@ export type Resolution =
     }
   | { kind: "dormant" };
 
-/** Live proposals = rows at the CURRENT ply (submit_turn voids older ones). */
-function liveRows(rows: ActionRow[], currentPly: number): ActionRow[] {
-  return rows.filter((r) => r.ply_at === currentPly);
+/** Live rows = within the one-round proposal window (P2). */
+export function liveRows(rows: ActionRow[], currentPly: number): ActionRow[] {
+  return rows.filter(
+    (r) => currentPly - r.ply_at < PROPOSAL_WINDOW_PLIES && r.ply_at <= currentPly,
+  );
 }
 
 export function resolveResignation(
@@ -136,7 +147,6 @@ export function resolveAbandonment(
   const partnerId = Object.entries(seats).find(
     ([, seat]) => seat === partnerOf(activeSeat),
   )?.[0];
-  if (live.some((r) => r.kind === "abandon_object")) return { kind: "dormant" };
 
   const agreers = new Set(
     live
@@ -144,19 +154,29 @@ export function resolveAbandonment(
       .map((r) => r.user_id),
   );
   const others = Object.keys(seats).filter((u) => u !== absentUserId);
+  const opponents = others.filter((u) => u !== partnerId);
+  // ONLY the absent player's partner may steer the outcome to dormant (P1)
+  // — and only against an actual closure attempt (both opponents agreed).
+  // An opponent's objection simply leaves the game active; nobody can
+  // unilaterally force dormancy.
+  const partnerObjects =
+    partnerId !== undefined &&
+    live.some((r) => r.kind === "abandon_object" && r.user_id === partnerId);
+  const opponentsAgree = opponents.every((u) => agreers.has(u));
+
+  if (partnerObjects && opponentsAgree) return { kind: "dormant" };
+  if (partnerObjects) return { kind: "none" };
+
   const allThree = others.every((u) => agreers.has(u));
   if (!allThree) return { kind: "none" };
 
-  if (partnerId && agreers.has(partnerId)) {
-    // Partner concedes on the team's behalf (§7.4-consistent).
-    const losingTeam = teamOf(activeSeat);
-    return {
-      kind: "complete",
-      result: losingTeam === 1 ? "team_24" : "team_13",
-      reason: "abandonment",
-    };
-  }
-  return { kind: "dormant" };
+  // All three agreed — the partner among them concedes for the team (§7.4).
+  const losingTeam = teamOf(activeSeat);
+  return {
+    kind: "complete",
+    result: losingTeam === 1 ? "team_24" : "team_13",
+    reason: "abandonment",
+  };
 }
 
 /** Nudge rate limit: one per user per game per 24h. */

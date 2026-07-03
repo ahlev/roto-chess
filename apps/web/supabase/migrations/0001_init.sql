@@ -56,6 +56,9 @@ create table games (
 );
 create index games_table_idx on games (table_id, game_no);
 create index games_active_seat_idx on games (active_seat) where status = 'active';
+-- One open episode per table: rematch creation can race from four clients.
+create unique index games_one_open_per_table on games (table_id)
+  where status in ('lobby','active');
 
 -- ---------------------------------------------------------------------------
 -- game_players — seats; team = seat parity (§1.1), never configurable
@@ -312,11 +315,15 @@ begin
   insert into moves (game_id, ply, seat, turn, notation)
   values (p_game_id, p_expected_ply + 1, p_seat, p_turn, p_notation);
 
-  -- A completed turn voids pending proposals (standard chess convention).
+  -- Proposals expire when the proposer's next turn arrives — one full round
+  -- of four plies (policy P2). Rows older than the window are dead weight;
+  -- rows inside it stay live so async partners can answer on their own
+  -- schedule. Keep in lockstep with PROPOSAL_WINDOW_PLIES (resolve-actions).
   delete from game_actions
    where game_id = p_game_id
-     and kind in ('resign_propose','draw_propose','draw_accept')
-     and ply_at < p_expected_ply + 1;
+     and kind in ('resign_propose','resign_confirm','resign_decline',
+                  'draw_propose','draw_accept','draw_decline')
+     and ply_at <= p_expected_ply + 1 - 4;
 end $$;
 
 revoke execute on function submit_turn from public, anon, authenticated;

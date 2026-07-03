@@ -70,9 +70,26 @@ export async function POST(request: Request) {
       .order("game_no", { ascending: false })
       .limit(1)
       .single();
-    // "Run it back" starts when the previous episode has ENDED — no piles
-    // of parallel lobbies inside one table.
+    // "Run it back" starts when the previous episode has ENDED — but if a
+    // rematch is ALREADY forming (another player clicked first), hand this
+    // table member the forming lobby instead of a dead end.
     if (last && ["lobby", "active"].includes(last.status as string)) {
+      const { data: open } = await supabase
+        .from("games")
+        .select("id, join_code, status")
+        .eq("table_id", tableId)
+        .in("status", ["lobby", "active"])
+        .order("game_no", { ascending: false })
+        .limit(1)
+        .single();
+      if (open) {
+        return NextResponse.json({
+          gameId: open.id as string,
+          tableId,
+          joinCode: open.join_code as string,
+          existing: true,
+        });
+      }
       return NextResponse.json(
         { error: "This table already has a game in progress" },
         { status: 409 },

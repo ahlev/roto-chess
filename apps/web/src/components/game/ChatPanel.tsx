@@ -44,12 +44,15 @@ export function ChatPanel({
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data } = await supabase
+    // Newest 200, then chronological — a years-long table channel must
+    // always show its LATEST page, not its first.
+    const { data: newestFirst } = await supabase
       .from("chat_messages")
       .select("id, user_id, body, anchor_ply, created_at, profiles(display_name)")
       .eq("table_id", tableId)
-      .order("created_at")
+      .order("created_at", { ascending: false })
       .limit(200);
+    const data = (newestFirst ?? []).slice().reverse();
     setRows(
       ((data ?? []) as unknown as Array<{
         id: number;

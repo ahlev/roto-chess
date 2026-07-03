@@ -389,8 +389,17 @@ function ResultSheet({
       setBusy(false);
       return;
     }
-    const { gameId: nextId } = (await res.json()) as { gameId: string };
-    router.push(`/app/game/${nextId}`);
+    const body = (await res.json()) as {
+      gameId: string;
+      joinCode?: string;
+      existing?: boolean;
+    };
+    if (body.existing && body.joinCode) {
+      // Someone else already set the rematch board — take a seat in it.
+      router.push(`/join/${body.joinCode}`);
+      return;
+    }
+    router.push(`/app/game/${body.gameId}`);
   };
 
   const exportRpgn = async () => {
