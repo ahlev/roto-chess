@@ -75,7 +75,25 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void load();
+    // The dashboard is the parking screen for N async games — heal on
+    // focus/visibility so the "(n)" badge and sections never rot silently.
+    const heal = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", heal);
+    window.addEventListener("focus", heal);
+    const interval = window.setInterval(heal, 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", heal);
+      window.removeEventListener("focus", heal);
+      window.clearInterval(interval);
+    };
   }, [load]);
+
+  // Redirect unauthenticated visitors (in an effect, never during render).
+  useEffect(() => {
+    if (signedIn === false) router.replace("/login?redirect=/app");
+  }, [signedIn, router]);
 
   const sections = useMemo(() => {
     const yourTurn: CardRow[] = [];
@@ -99,10 +117,14 @@ export default function DashboardPage() {
     return { yourTurn, waiting, settingUp, finished };
   }, [rows]);
 
-  // Title badge: "(2) Roto Chess"
+  // Title badge: "(2) Roto Chess" — restored on leave so the badge never
+  // haunts another page's tab title.
   useEffect(() => {
     const count = sections.yourTurn.length;
     document.title = count > 0 ? `(${count}) ${BRAND.name}` : BRAND.name;
+    return () => {
+      document.title = BRAND.name;
+    };
   }, [sections.yourTurn.length]);
 
   if (!supabase) {
@@ -119,8 +141,7 @@ export default function DashboardPage() {
     );
   }
   if (signedIn === false) {
-    router.replace("/login?redirect=/app");
-    return null;
+    return null; // the effect above is redirecting
   }
 
   return (
@@ -208,6 +229,23 @@ function Section({
   );
 }
 
+/** Viewer-relative status copy — never a raw enum like "team_13". */
+function cardStatus(row: CardRow): string {
+  if (row.status === "lobby") return "Waiting for seats";
+  if (row.status === "active") {
+    return row.active_seat === row.mySeat
+      ? "Your move. The table is watching."
+      : "Another seat is thinking";
+  }
+  if (row.status === "dormant") return "Dormant — resumable";
+  if (row.status === "abandoned") return "Closed as abandoned";
+  if (!row.result) return "Finished";
+  if (row.result === "draw") return "Drawn";
+  const myTeam = ((row.mySeat - 1) % 2) + 1;
+  const winnerTeam = row.result === "team_13" ? 1 : 2;
+  return myTeam === winnerTeam ? "You took the crown" : "The crown went the other way";
+}
+
 function GameCard({ row }: { row: CardRow }) {
   const state = useMemo<BoardState | null>(() => {
     try {
@@ -234,15 +272,7 @@ function GameCard({ row }: { row: CardRow }) {
       </div>
       <div className="min-w-0">
         <p className="truncate text-sm text-text">{row.tableName}</p>
-        <p className="text-xs text-text-dim">
-          {row.status === "lobby"
-            ? "Waiting for seats"
-            : row.status === "active"
-              ? row.active_seat === row.mySeat
-                ? "Your move. The table is watching."
-                : "Another seat is thinking"
-              : (row.result ?? row.status)}
-        </p>
+        <p className="text-xs text-text-dim">{cardStatus(row)}</p>
       </div>
     </Link>
   );

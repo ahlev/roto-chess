@@ -9,6 +9,7 @@ import type { Seat, TurnRef } from "@rotochess/engine";
 import { currentUserId, serviceClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/env";
 import { prepareTurn } from "@/lib/game/prepare-turn";
+import { gameOverEmail, sendMail, yourMoveEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -88,10 +89,69 @@ export async function POST(
       { status: conflict ? 409 : 500 },
     );
   }
+  // Notifications (fire-and-forget; console transport until the founder
+  // wires RESEND_API_KEY). One email per turn-cycle to the next mover, or
+  // a game-over note to everyone.
+  void notify(supabase, gameId, prepared, new URL(request.url).origin).catch(
+    (e: unknown) => console.error("[notify]", e),
+  );
+
   return NextResponse.json({
     ply: (game.current_ply as number) + 1,
     notation: prepared.notation,
     status: prepared.newStatus,
     result: prepared.result,
   });
+}
+
+async function notify(
+  supabase: ReturnType<typeof serviceClient>,
+  gameId: string,
+  prepared: Extract<ReturnType<typeof prepareTurn>, { ok: true }>,
+  origin: string,
+) {
+  const gameUrl = `${origin}/app/game/${gameId}`;
+  const { data: meta } = await supabase
+    .from("games")
+    .select("tables(name)")
+    .eq("id", gameId)
+    .single();
+  const tableName =
+    (meta as { tables?: { name?: string } } | null)?.tables?.name ??
+    "the board";
+
+  const { data: players } = await supabase
+    .from("game_players")
+    .select("seat, user_id, profiles(email_notifications)")
+    .eq("game_id", gameId);
+  const rows = (players ?? []) as unknown as Array<{
+    seat: number;
+    user_id: string;
+    profiles: { email_notifications: boolean } | null;
+  }>;
+
+  const mailTo = async (userId: string, mail: { subject: string; text: string }) => {
+    const { data } = await supabase.auth.admin.getUserById(userId);
+    const email = data?.user?.email;
+    if (email) await sendMail({ to: email, ...mail });
+  };
+
+  if (prepared.newStatus === "complete") {
+    const line =
+      prepared.result === "team_13"
+        ? "Red & Blue take the crown."
+        : prepared.result === "team_24"
+          ? "Black & Gold take the crown."
+          : "A draw — the crown stays on the table.";
+    for (const p of rows) {
+      if (p.profiles?.email_notifications !== false) {
+        await mailTo(p.user_id, gameOverEmail(tableName, line, gameUrl));
+      }
+    }
+    return;
+  }
+  const next = rows.find((p) => p.seat === prepared.newActiveSeat);
+  if (next && next.profiles?.email_notifications !== false) {
+    await mailTo(next.user_id, yourMoveEmail(tableName, gameUrl));
+  }
 }

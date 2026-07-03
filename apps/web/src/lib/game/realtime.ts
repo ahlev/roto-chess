@@ -57,6 +57,17 @@ export function subscribeToGame(
       },
       () => bell.onSeatChange(),
     )
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "game_actions",
+        filter: `game_id=eq.${gameId}`,
+      },
+      // Proposals/claims/nudges: same doorbell, same refetch.
+      () => bell.onGameUpdate(),
+    )
     .subscribe((status) => {
       if (status === "SUBSCRIBED") bell.onSubscribed();
     });

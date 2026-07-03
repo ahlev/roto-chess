@@ -54,8 +54,12 @@ export interface OnlineGame {
   pendingChoice: Move | null;
   lastMoveSquares: readonly Square[];
   submitInFlight: boolean;
+  submitError: string | null;
   draws: { threefold: boolean; fiftyMove: boolean };
   turnsCount: number;
+  actions: ActionRowView[];
+  lastMoveAt: string | null;
+  myUserId: string | null;
   tap: (square: Square) => void;
   choosePending: (m: Move) => void;
   confirm: () => void;
@@ -74,6 +78,13 @@ interface GameRow {
   active_seat: number | null;
   result: string | null;
   result_reason: string | null;
+  last_move_at: string | null;
+}
+
+export interface ActionRowView {
+  user_id: string;
+  kind: string;
+  ply_at: number;
 }
 
 export function useOnlineGame(gameId: string): OnlineGame {
@@ -89,6 +100,8 @@ export function useOnlineGame(gameId: string): OnlineGame {
   const [pendingChoice, setPendingChoice] = useState<Move | null>(null);
   const [lastMoveSquares, setLastMoveSquares] = useState<readonly Square[]>([]);
   const [submitInFlight, setSubmitInFlight] = useState(false);
+  const [actions, setActions] = useState<ActionRowView[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const plyRef = useRef<number>(-1);
 
   const state = useMemo(() => {
@@ -100,43 +113,78 @@ export function useOnlineGame(gameId: string): OnlineGame {
     }
   }, [row?.state]);
 
-  const refetch = useCallback(async () => {
-    if (!supabase) return;
-    const { data: game, error: gErr } = await supabase
-      .from("games")
-      .select(
-        "id, table_id, join_code, status, state, current_ply, active_seat, result, result_reason",
-      )
-      .eq("id", gameId)
-      .single();
-    if (gErr || !game) {
-      setError("This game could not be found (or you're not at its table).");
+  const submitInFlightRef = useRef(false);
+  const pendingRefetchRef = useRef(false);
+
+  const refetch = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (!supabase) return;
+      // While our own submit is in flight, a doorbell refetch can read the
+      // DB BEFORE our commit lands and roll the optimistic state back —
+      // visible flicker. Defer non-forced refetches until the submit ends.
+      if (submitInFlightRef.current && !opts?.force) {
+        pendingRefetchRef.current = true;
+        return;
+      }
+      const { data: game, error: gErr } = await supabase
+        .from("games")
+        .select(
+          "id, table_id, join_code, status, state, current_ply, active_seat, result, result_reason, last_move_at",
+        )
+        .eq("id", gameId)
+        .single();
+      if (gErr || !game) {
+        // Row genuinely absent (or not visible) → not-found. A transport
+        // hiccup keeps the last good snapshot and stays quiet — the next
+        // doorbell or focus refetch heals it.
+        if (gErr?.code === "PGRST116" || !gErr) {
+          setError(
+            "This game could not be found (or you're not at its table).",
+          );
+        }
+        setLoading(false);
+        return;
+      }
+      setError(null);
+      const { data: players } = await supabase
+        .from("game_players")
+        .select("seat, user_id, profiles(display_name)")
+        .eq("game_id", gameId);
+      const { data: actionRows } = await supabase
+        .from("game_actions")
+        .select("user_id, kind, ply_at")
+        .eq("game_id", gameId)
+        .order("created_at");
+      setActions((actionRows ?? []) as ActionRowView[]);
+      const fresh = game as unknown as GameRow;
+      // Snapshot moved under a staged/selected interaction → the staging is
+      // meaningless against the new position: clear it.
+      if (plyRef.current !== -1 && fresh.current_ply !== plyRef.current) {
+        setStagedFirst(null);
+        setSelected(null);
+        setPending([]);
+        setPendingChoice(null);
+      }
+      setRow(fresh);
+      plyRef.current = fresh.current_ply;
+      setSeats(
+        ((players ?? []) as unknown as Array<{
+          seat: number;
+          user_id: string;
+          profiles: { display_name: string | null } | null;
+        }>)
+          .map((p) => ({
+            seat: p.seat as Seat,
+            userId: p.user_id,
+            displayName: p.profiles?.display_name ?? "Player",
+            ready: false,
+          }))
+          .sort((a, b) => a.seat - b.seat),
+      );
       setLoading(false);
-      return;
-    }
-    const { data: players } = await supabase
-      .from("game_players")
-      .select("seat, user_id, ready, profiles(display_name)")
-      .eq("game_id", gameId);
-    setRow(game as unknown as GameRow);
-    plyRef.current = (game as { current_ply: number }).current_ply;
-    setSeats(
-      ((players ?? []) as unknown as Array<{
-        seat: number;
-        user_id: string;
-        ready: boolean;
-        profiles: { display_name: string | null } | null;
-      }>)
-        .map((p) => ({
-          seat: p.seat as Seat,
-          userId: p.user_id,
-          displayName: p.profiles?.display_name ?? "Player",
-          ready: p.ready,
-        }))
-        .sort((a, b) => a.seat - b.seat),
-    );
-    setLoading(false);
-  }, [supabase, gameId]);
+    },
+    [supabase, gameId],
+  );
 
   // Identity
   useEffect(() => {
@@ -150,7 +198,8 @@ export function useOnlineGame(gameId: string): OnlineGame {
     });
   }, [supabase]);
 
-  // Doorbell subscription
+  // Doorbell subscription + focus/visibility healing (a dropped realtime
+  // message must never leave the client stale forever).
   useEffect(() => {
     if (!supabase) return;
     const channel = subscribeToGame(supabase, gameId, {
@@ -159,8 +208,15 @@ export function useOnlineGame(gameId: string): OnlineGame {
       onSeatChange: () => void refetch(),
       onSubscribed: () => void refetch(),
     });
+    const heal = () => {
+      if (document.visibilityState === "visible") void refetch();
+    };
+    document.addEventListener("visibilitychange", heal);
+    window.addEventListener("focus", heal);
     return () => {
       void supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", heal);
+      window.removeEventListener("focus", heal);
     };
   }, [supabase, gameId, refetch]);
 
@@ -232,7 +288,9 @@ export function useOnlineGame(gameId: string): OnlineGame {
   );
 
   const confirm = useCallback(() => {
-    if (!state || !pendingChoice || !myTurn) return;
+    if (!state || !pendingChoice || !myTurn || submitInFlightRef.current) {
+      return;
+    }
     if (inOpening(state) && !stagedFirst) {
       setStagedFirst(pendingChoice);
       setPending([]);
@@ -251,22 +309,35 @@ export function useOnlineGame(gameId: string): OnlineGame {
         ...(m.rotDir ? { rotDir: m.rotDir } : {}),
       })),
     };
-    // Optimistic apply:
+    // Optimistic apply — including terminal status, so a mating move never
+    // shows "X is thinking…" while the doorbell catches up.
     const turn: Turn = { submoves: submoves as unknown as Turn["submoves"] };
     const applied = applyTurn(state, turn);
     if (!applied.ok) {
       clearInteraction();
       return;
     }
+    const optimisticStatus = evaluateStatus(applied.state);
+    const terminal = optimisticStatus.kind !== "active";
     const touched: Square[] = submoves.flatMap((m) => [m.from, m.to]);
     setSubmitInFlight(true);
+    submitInFlightRef.current = true;
+    setSubmitError(null);
     setRow((prev) =>
       prev
         ? {
             ...prev,
             state: JSON.parse(JSON.stringify(applied.state)) as unknown,
             current_ply: prev.current_ply + 1,
-            active_seat: applied.state.activeSeat,
+            active_seat: terminal ? null : applied.state.activeSeat,
+            status: terminal ? "complete" : prev.status,
+            result: terminal
+              ? optimisticStatus.kind === "checkmate"
+                ? optimisticStatus.winningTeam === 1
+                  ? "team_13"
+                  : "team_24"
+                : "draw"
+              : prev.result,
           }
         : prev,
     );
@@ -280,12 +351,21 @@ export function useOnlineGame(gameId: string): OnlineGame {
     })
       .then(async (res) => {
         if (!res.ok) {
-          // Rejected (race or bug): roll back by refetching truth.
-          await refetch();
+          setSubmitError("The move didn't go through — board updated.");
+          setLastMoveSquares([]);
         }
       })
-      .catch(() => refetch())
-      .finally(() => setSubmitInFlight(false));
+      .catch(() => {
+        setSubmitError("The table wobbled. Setting it right…");
+        setLastMoveSquares([]);
+      })
+      .finally(() => {
+        setSubmitInFlight(false);
+        submitInFlightRef.current = false;
+        pendingRefetchRef.current = false;
+        // One forced refetch reconciles truth either way (commit or 409).
+        void refetch({ force: true });
+      });
   }, [
     state,
     pendingChoice,
@@ -313,10 +393,6 @@ export function useOnlineGame(gameId: string): OnlineGame {
     [state],
   );
 
-  // Status double-check for display (the server already recorded terminal
-  // states; this keeps the client honest if it applied optimistically).
-  useMemo(() => (state ? evaluateStatus(state) : null), [state]);
-
   return {
     loading,
     error,
@@ -337,8 +413,12 @@ export function useOnlineGame(gameId: string): OnlineGame {
     pendingChoice,
     lastMoveSquares,
     submitInFlight,
+    submitError,
     draws,
     turnsCount: row?.current_ply ?? 0,
+    actions,
+    lastMoveAt: row?.last_move_at ?? null,
+    myUserId,
     tap,
     choosePending: setPendingChoice,
     confirm,

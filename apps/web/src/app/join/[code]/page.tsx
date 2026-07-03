@@ -28,6 +28,8 @@ export default function JoinPage({
   const router = useRouter();
   const supabase = browserClient();
   const [openSeats, setOpenSeats] = useState<Seat[] | null>(null);
+  const [tableName, setTableName] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,11 +39,30 @@ export default function JoinPage({
     void supabase.auth.getUser().then(({ data }) => {
       setSignedIn(Boolean(data.user));
     });
-    // Preview: which seats are open? (join_game is the writer; for the
-    // preview we ask a tiny RPC-free question — try each seat lazily at
-    // join time instead. V1 preview = static explanation + seat buttons.)
-    setOpenSeats([1, 2, 3, 4]);
-  }, [supabase]);
+    // Honest preview (works before auth): table name + truly open seats.
+    void supabase
+      .rpc("preview_game", { p_code: code })
+      .then(({ data }) => {
+        const row = (
+          data as Array<{
+            table_name: string;
+            taken_seats: number[];
+            game_status: string;
+          }> | null
+        )?.[0];
+        if (!row || row.game_status !== "lobby") {
+          setStale(true);
+          setOpenSeats([]);
+          return;
+        }
+        setTableName(row.table_name);
+        setOpenSeats(
+          ([1, 2, 3, 4] as const).filter(
+            (s) => !row.taken_seats.includes(s),
+          ),
+        );
+      });
+  }, [supabase, code]);
 
   if (!supabase) {
     return (
@@ -82,10 +103,28 @@ export default function JoinPage({
     router.push(`/app/game/${data as string}`);
   };
 
+  if (stale) {
+    return (
+      <Shell>
+        <p className="text-center text-sm text-text-dim">
+          This code isn't seating — the table may be full, finished, or the
+          code mistyped.
+        </p>
+        <p
+          className="py-3 text-center text-2xl tracking-widest text-text-dim"
+          style={{ fontFamily: "var(--font-plex-mono)" }}
+        >
+          ROTO-{code}
+        </p>
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       <p className="text-center text-sm text-text-dim">
-        You're wanted at the board. A Roto game is forming.
+        You're wanted at the board.{" "}
+        {tableName ? `${tableName} is forming.` : "A Roto game is forming."}
       </p>
       <p
         className="py-3 text-center text-3xl tracking-widest text-text"
@@ -103,14 +142,19 @@ export default function JoinPage({
           <button
             key={seat}
             type="button"
-            disabled={busy}
+            disabled={busy || signedIn === null}
             onClick={() => take(seat)}
-            className="min-h-11 rounded-lg border border-line p-3 text-sm text-text hover:bg-surface-raised"
+            className="min-h-11 rounded-lg border border-line p-3 text-sm text-text hover:bg-surface-raised disabled:opacity-50"
           >
             Take {SEAT_NAME[seat]} ({SEAT_COMPASS[seat]})
           </button>
         ))}
       </div>
+      {openSeats !== null && openSeats.length === 0 && !stale && (
+        <p className="pt-3 text-center text-xs text-text-dim">
+          All four seats are warm.
+        </p>
+      )}
       {!signedIn && signedIn !== null && (
         <p className="pt-3 text-center text-xs text-text-dim">
           You'll sign in first — the seat will be waiting.

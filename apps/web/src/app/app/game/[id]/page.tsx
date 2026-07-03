@@ -5,16 +5,20 @@
  * live (board + confirm bar + history), game-over (result sheet over a
  * still-readable board).
  */
-import { use, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   SEAT_COMPASS,
+  gameToRotoPgn,
   parseGame,
   type Seat,
 } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { NotationList } from "@/components/game/NotationList";
+import { ChatPanel } from "@/components/game/ChatPanel";
+import { EndGameActions } from "@/components/game/EndGameActions";
 import { useOnlineGame } from "@/components/game/useOnlineGame";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
@@ -54,6 +58,12 @@ export default function GameRoomPage({
       if (game.result === "team_24") return "Black & Gold take the crown.";
       return "A draw — the crown stays on the table.";
     }
+    if (game.gameStatus === "dormant") {
+      return "This table went quiet. The game sleeps; it can always resume.";
+    }
+    if (game.gameStatus === "abandoned") {
+      return "Closed as abandoned.";
+    }
     const seat = game.state.activeSeat;
     const mine = game.mySeat === seat;
     const step =
@@ -82,10 +92,15 @@ export default function GameRoomPage({
   }
 
   const copyInvite = async () => {
-    const url = `${window.location.origin}/join/${game.joinCode}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      const url = `${window.location.origin}/join/${game.joinCode}`;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard can be denied; the code is displayed right above anyway.
+      setCopied(false);
+    }
   };
 
   // ---- LOBBY ----
@@ -103,9 +118,11 @@ export default function GameRoomPage({
           className="w-full opacity-90"
         />
         <div className="mt-4 grid grid-cols-2 gap-2">
+          {/* RLS admits only participants to this page, so everyone here is
+              already seated — empty plaques are invitations for the LINK,
+              not buttons. Joining happens through /join/[code]. */}
           {([1, 2, 3, 4] as const).map((seat) => {
             const taken = game.seats.find((s) => s.seat === seat);
-            const isJoinable = !taken && game.mySeat === null;
             return (
               <div
                 key={seat}
@@ -115,13 +132,7 @@ export default function GameRoomPage({
                   {SEAT_COMPASS[seat]} · {SEAT_NAME[seat]}
                 </span>
                 <div className="mt-1 text-text-dim">
-                  {taken ? (
-                    taken.displayName
-                  ) : isJoinable ? (
-                    <TakeSeat code={game.joinCode ?? ""} seat={seat} onJoined={game.refetch} />
-                  ) : (
-                    "open"
-                  )}
+                  {taken ? taken.displayName : "open — send the link"}
                 </div>
               </div>
             );
@@ -186,6 +197,15 @@ export default function GameRoomPage({
         {statusLine}
       </p>
 
+      {game.submitError && (
+        <p
+          aria-live="assertive"
+          className="pb-2 text-center text-xs text-[color:var(--danger)]"
+        >
+          {game.submitError}
+        </p>
+      )}
+
       {game.stagedFirst && (
         <div className="mb-2 flex items-center justify-center gap-2 text-xs text-text-dim">
           <span>First move recorded.</span>
@@ -217,26 +237,47 @@ export default function GameRoomPage({
         />
       )}
 
-      {showHistory && <HistoryPane gameId={game.gameId} />}
+      {showHistory && <HistoryPane gameId={game.gameId} turnsCount={game.turnsCount} />}
+
+      {game.gameStatus === "active" &&
+        game.mySeat !== null &&
+        game.myUserId &&
+        game.state && (
+          <EndGameActions
+            gameId={game.gameId}
+            mySeat={game.mySeat}
+            myUserId={game.myUserId}
+            currentPly={game.turnsCount}
+            activeSeat={game.state.activeSeat}
+            seats={game.seats.map((s) => ({
+              seat: s.seat,
+              userId: s.userId,
+              displayName: s.displayName,
+            }))}
+            actions={game.actions}
+            draws={game.draws}
+            lastMoveAt={game.lastMoveAt}
+            onChanged={() => void game.refetch()}
+          />
+        )}
 
       {game.gameStatus === "complete" && (
-        <div className="mt-4 rounded-lg border border-line bg-surface-raised p-4 text-center">
-          <p
-            className="text-2xl text-text"
-            style={{ fontFamily: "var(--font-instrument-serif)" }}
-            data-testid="result-line"
-          >
-            {statusLine}
-          </p>
-          <p className="mt-1 text-xs text-text-dim">
-            {game.resultReason ?? ""}
-          </p>
-          <Link
-            href="/app"
-            className="mt-3 inline-block rounded-full border border-line px-4 py-2 text-sm text-text-dim"
-          >
-            Back to your games
-          </Link>
+        <ResultSheet
+          statusLine={statusLine}
+          reason={game.resultReason}
+          tableId={game.tableId}
+          gameId={game.gameId}
+          mySeat={game.mySeat}
+        />
+      )}
+
+      {game.tableId && game.myUserId && (
+        <div className="mt-4">
+          <ChatPanel
+            tableId={game.tableId}
+            gameId={game.gameId}
+            myUserId={game.myUserId}
+          />
         </div>
       )}
 
@@ -276,51 +317,190 @@ function Header() {
   );
 }
 
-/** Claim a seat via the join_game RPC (RLS-safe, race-safe). */
-function TakeSeat({
-  code,
-  seat,
-  onJoined,
+/**
+ * Result sheet: the verdict, the running SERIES TALLY across the table's
+ * episodes, "Run it back" (same seats or rotated), and .rpgn export.
+ */
+function ResultSheet({
+  statusLine,
+  reason,
+  tableId,
+  gameId,
+  mySeat,
 }: {
-  code: string;
-  seat: Seat;
-  onJoined: () => Promise<void>;
+  statusLine: string;
+  reason: string | null;
+  tableId: string | null;
+  gameId: string;
+  mySeat: Seat | null;
 }) {
+  const router = useRouter();
+  const [tally, setTally] = useState<{
+    ns: number;
+    ew: number;
+    draws: number;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
-  const take = async () => {
+  const [note, setNote] = useState<string | null>(null);
+
+  const loadTally = useCallback(async () => {
+    const supabase = browserClient();
+    if (!supabase || !tableId) return;
+    const { data } = await supabase
+      .from("games")
+      .select("result")
+      .eq("table_id", tableId)
+      .not("result", "is", null);
+    let ns = 0;
+    let ew = 0;
+    let draws = 0;
+    for (const row of data ?? []) {
+      if (row.result === "team_13") ns++;
+      else if (row.result === "team_24") ew++;
+      else draws++;
+    }
+    setTally({ ns, ew, draws });
+  }, [tableId]);
+
+  useEffect(() => {
+    void loadTally();
+  }, [loadTally]);
+
+  const runItBack = async (rotate: boolean) => {
+    if (!tableId) return;
+    setBusy(true);
+    setNote(null);
+    const seat: Seat | undefined =
+      mySeat === null
+        ? undefined
+        : rotate
+          ? ((((mySeat - 1 + 1) % 4) + 1) as Seat)
+          : mySeat;
+    const res = await fetch("/api/games", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tableId, seat }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setNote(body?.error ?? "The rematch didn't take. Try again.");
+      setBusy(false);
+      return;
+    }
+    const { gameId: nextId } = (await res.json()) as { gameId: string };
+    router.push(`/app/game/${nextId}`);
+  };
+
+  const exportRpgn = async () => {
     const supabase = browserClient();
     if (!supabase) return;
-    setBusy(true);
-    await supabase.rpc("join_game", { p_code: code, p_seat: seat });
-    await onJoined();
-    setBusy(false);
+    const { data } = await supabase
+      .from("moves")
+      .select("ply, notation")
+      .eq("game_id", gameId)
+      .order("ply");
+    if (!data) return;
+    try {
+      const parsed = parseGame(`${data.map((d) => d.notation).join(" ")}\n`);
+      const text = gameToRotoPgn(parsed.turns, { site: BRAND.name });
+      const blob = new Blob([text], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "roto-game.rpgn";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setNote("The record wouldn't replay for export.");
+    }
   };
+
   return (
-    <button
-      type="button"
-      onClick={take}
-      disabled={busy}
-      className="rounded-full border border-line px-3 py-0.5 text-xs text-text"
-    >
-      {busy ? "…" : "Take a seat"}
-    </button>
+    <div className="mt-4 rounded-lg border border-line bg-surface-raised p-4 text-center">
+      <p
+        className="text-2xl text-text"
+        style={{ fontFamily: "var(--font-instrument-serif)" }}
+        data-testid="result-line"
+      >
+        {statusLine}
+      </p>
+      <p className="mt-1 text-xs text-text-dim">{reason ?? ""}</p>
+      {tally && (
+        <p
+          className="mt-2 text-sm text-text"
+          style={{ fontFamily: "var(--font-plex-mono)" }}
+          data-testid="series-tally"
+        >
+          Red&Blue {tally.ns} — {tally.ew} Black&Gold
+          {tally.draws > 0 ? ` · ${tally.draws} drawn` : ""}
+        </p>
+      )}
+      {note && (
+        <p className="mt-2 text-xs text-[color:var(--danger)]">{note}</p>
+      )}
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
+        {mySeat !== null && (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => runItBack(false)}
+              className="rounded-full bg-[color:var(--focus-ring)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)]"
+            >
+              Again. Same seats?
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => runItBack(true)}
+              className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+            >
+              Rotate seats
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={exportRpgn}
+          className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+        >
+          Export .rpgn
+        </button>
+        <Link
+          href="/app"
+          className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+        >
+          Back to your games
+        </Link>
+      </div>
+    </div>
   );
 }
 
 /** History fetched from the moves table (canonical notation, replayed). */
-function HistoryPane({ gameId }: { gameId: string }) {
+function HistoryPane({
+  gameId,
+  turnsCount,
+}: {
+  gameId: string;
+  turnsCount: number;
+}) {
   const [turns, setTurns] = useState<ReturnType<typeof parseGame>["turns"] | null>(null);
   const [failed, setFailed] = useState(false);
 
-  useMemo(() => {
+  useEffect(() => {
     const supabase = browserClient();
     if (!supabase) return;
+    let cancelled = false;
     void supabase
       .from("moves")
       .select("ply, notation")
       .eq("game_id", gameId)
       .order("ply")
       .then(({ data }) => {
+        if (cancelled) return;
         if (!data) {
           setFailed(true);
           return;
@@ -334,7 +514,10 @@ function HistoryPane({ gameId }: { gameId: string }) {
           setFailed(true);
         }
       });
-  }, [gameId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, turnsCount]);
 
   if (failed) {
     return (

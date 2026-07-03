@@ -346,12 +346,21 @@ begin
     raise exception 'GAME_NOT_JOINABLE';
   end if;
 
+  -- Idempotent for a user who is already seated (second tab, double-tap):
+  -- just hand back the game instead of a misleading SEAT_TAKEN.
+  if exists (
+    select 1 from game_players
+    where game_id = v_game.id and user_id = auth.uid()
+  ) then
+    return v_game.id;
+  end if;
+
   insert into game_players (game_id, seat, user_id)
   values (v_game.id, p_seat, auth.uid())
   on conflict do nothing;
   get diagnostics v_inserted = row_count;
   if v_inserted = 0 then
-    raise exception 'SEAT_TAKEN_OR_ALREADY_SEATED';
+    raise exception 'SEAT_TAKEN';
   end if;
 
   -- Fourth seat fills → the game goes live; seat 1 opens (engine initial).
@@ -365,3 +374,27 @@ begin
 end $$;
 
 grant execute on function join_game to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- preview_game — an honest join page BEFORE the auth gate: table name and
+-- taken seats only (no user ids, no state). Safe for anon: the caller must
+-- already hold the unguessable code.
+-- ---------------------------------------------------------------------------
+create or replace function preview_game(p_code text)
+returns table (table_name text, taken_seats smallint[], game_status text)
+language sql security definer stable
+set search_path = public, pg_temp as $$
+  select
+    t.name,
+    coalesce(
+      (select array_agg(gp.seat order by gp.seat)
+         from game_players gp where gp.game_id = g.id),
+      '{}'::smallint[]
+    ),
+    g.status
+  from games g
+  join tables t on t.id = g.table_id
+  where g.join_code = upper(p_code);
+$$;
+
+grant execute on function preview_game to authenticated, anon;
