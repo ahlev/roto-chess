@@ -4,8 +4,13 @@
  * The game-end machinery, presented gently: resign (partner confirms),
  * draw offer (all four), rule claims when the engine says they exist,
  * abandonment door when the board has been silent, and the human nudge.
+ *
+ * Resign and draw PROPOSALS both sit behind a loud two-step gate: the
+ * confirmation state is unmistakable (danger styling, explicit copy), and
+ * it dissolves on its own — Escape, clicking elsewhere, or ~8 quiet
+ * seconds all mean "never mind".
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { partnerOf, type Seat } from "@rotochess/engine";
 import { PROPOSAL_WINDOW_PLIES } from "@/lib/game/resolve-actions";
 
@@ -28,10 +33,38 @@ export interface EndGameActionsProps {
   onChanged: () => void;
 }
 
+/** An armed gate resets itself after this long without confirmation. */
+const GATE_RESET_MS = 8_000;
+
+type Gate = "resign" | "draw" | null;
+
 export function EndGameActions(props: EndGameActionsProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [confirmResign, setConfirmResign] = useState(false);
+  const [gate, setGate] = useState<Gate>(null);
+  const gateRef = useRef<HTMLDivElement | null>(null);
+
+  // The gate stands down on its own: timeout, Escape, or a click anywhere
+  // outside the confirmation block.
+  useEffect(() => {
+    if (gate === null) return;
+    const timer = window.setTimeout(() => setGate(null), GATE_RESET_MS);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setGate(null);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (gateRef.current && !gateRef.current.contains(e.target as Node)) {
+        setGate(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [gate]);
 
   const live = useMemo(
     () =>
@@ -174,47 +207,97 @@ export function EndGameActions(props: EndGameActionsProps) {
         <p className="text-center text-xs text-[color:var(--danger)]">{note}</p>
       )}
 
+      {/* Armed confirmation gates — loud, explicit, self-dissolving. */}
+      {gate === "resign" && !resignProposal && (
+        <div
+          ref={gateRef}
+          data-testid="resign-gate"
+          role="alertdialog"
+          aria-label="Confirm resignation"
+          className="rounded-lg border-2 border-[color:var(--danger)] bg-surface-raised p-3 text-center"
+        >
+          <p className="text-sm font-semibold text-[color:var(--danger)]">
+            Tip your king? This resigns for your whole team.
+          </p>
+          <p className="mt-0.5 text-xs text-text-dim">
+            Your partner will be asked to agree before the kings fall.
+          </p>
+          <div className="mt-2 flex justify-center gap-2">
+            <button
+              className="rounded-full bg-[color:var(--danger)] px-4 py-1.5 text-xs font-bold text-[color:var(--ink)] disabled:opacity-50"
+              disabled={busy !== null}
+              onClick={() => {
+                setGate(null);
+                void send("resign_propose");
+              }}
+            >
+              Yes — tip my king
+            </button>
+            <button
+              className={chip}
+              disabled={busy !== null}
+              onClick={() => setGate(null)}
+            >
+              Never mind
+            </button>
+          </div>
+        </div>
+      )}
+      {gate === "draw" && !drawProposal && (
+        <div
+          ref={gateRef}
+          data-testid="draw-gate"
+          role="alertdialog"
+          aria-label="Confirm draw offer"
+          className="rounded-lg border-2 border-[color:var(--focus-ring)] bg-surface-raised p-3 text-center"
+        >
+          <p className="text-sm font-semibold text-text">
+            Offer a draw to the table?
+          </p>
+          <p className="mt-0.5 text-xs text-text-dim">
+            All four players must agree.
+          </p>
+          <div className="mt-2 flex justify-center gap-2">
+            <button
+              className="rounded-full bg-[color:var(--focus-ring)] px-4 py-1.5 text-xs font-bold text-[color:var(--ink)] disabled:opacity-50"
+              disabled={busy !== null}
+              onClick={() => {
+                setGate(null);
+                void send("draw_propose");
+              }}
+            >
+              Yes — offer the draw
+            </button>
+            <button
+              className={chip}
+              disabled={busy !== null}
+              onClick={() => setGate(null)}
+            >
+              Never mind
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Quiet action row */}
       <div className="flex flex-wrap justify-center gap-2">
-        {!resignProposal && !confirmResign && (
+        {!resignProposal && gate !== "resign" && (
           <button
             className={chip}
             disabled={busy !== null}
-            onClick={() => setConfirmResign(true)}
+            onClick={() => setGate("resign")}
             title="Your partner will be asked to confirm"
           >
             Tip your king…
           </button>
         )}
-        {confirmResign && !resignProposal && (
-          <span className="inline-flex items-center gap-2 text-xs text-text-dim">
-            Ask your partner to agree?
-            <button
-              className={chip}
-              disabled={busy !== null}
-              onClick={() => {
-                setConfirmResign(false);
-                void send("resign_propose");
-              }}
-            >
-              Ask them
-            </button>
-            <button
-              className={chip}
-              disabled={busy !== null}
-              onClick={() => setConfirmResign(false)}
-            >
-              Never mind
-            </button>
-          </span>
-        )}
-        {!drawProposal && (
+        {!drawProposal && gate !== "draw" && (
           <button
             className={chip}
             disabled={busy !== null}
-            onClick={() => send("draw_propose")}
+            onClick={() => setGate("draw")}
           >
-            Offer a draw
+            Offer a draw…
           </button>
         )}
         {(props.draws.threefold || props.draws.fiftyMove) && (

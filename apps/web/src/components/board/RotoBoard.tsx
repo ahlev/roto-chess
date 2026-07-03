@@ -9,8 +9,18 @@
  *
  * Keyboard driving (a11y): the wrapper takes focus; arrow keys walk a
  * cursor square around the ring, Enter/Space activates it through the SAME
- * onSquareTap path as a pointer tap, Escape clears the selection, and a
- * visually-hidden polite live region narrates the cursor and results.
+ * onSquareTap path as a pointer tap, Escape clears the selection (and any
+ * zoom), and a visually-hidden polite live region narrates the cursor and
+ * results.
+ *
+ * Zoom viewport: the SVG sits inside an overflow-hidden wrapper whose inner
+ * div takes a CSS scale+translate. Pinch zooms 1×–3× around the pinch
+ * midpoint, one-finger drag pans while zoomed, double-tap (touch) toggles
+ * 2×, ctrl+wheel zooms on desktop, and a floating reset button appears
+ * while zoomed. Taps are dispatched on pointerup only when total pointer
+ * travel stays under a small slop, so moves still work while zoomed. The
+ * CSS transform never touches the SVG's own coordinate math — the tap
+ * handler reads getBoundingClientRect(), which already reflects it.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -72,6 +82,21 @@ const KIND_NAME: Record<PieceKind, string> = {
 
 const PIECE_SIZE = 34;
 
+// --- Zoom viewport tuning -------------------------------------------------
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3;
+/** Pointer travel (client px) under this is a tap; over it, a drag/pan. */
+const TAP_SLOP_PX = 8;
+/** Two touch taps within this window + slop toggle zoom instead of selecting. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_SLOP_PX = 32;
+
+/** Active-turn rim arc: hugs the outer rail, spans the seat's 8-rank home
+ * quadrant (meridian ±45°, inset 2° so neighbours never touch). Outer edge
+ * 285 + 3.5/2 = 286.75 < CENTER (288) — inside the viewBox by design. */
+const TURN_ARC_R = OUTER_R + 5;
+const TURN_ARC_HALF_DEG = 43;
+
 /** Standard visually-hidden style for the live region (screen readers only). */
 const VISUALLY_HIDDEN: CSSProperties = {
   position: "absolute",
@@ -111,6 +136,13 @@ export interface RotoBoardProps {
    * inscribes the rim.
    */
   ceremonyWinner?: 1 | 2 | null;
+  /**
+   * Let the board outgrow its column slightly (~6%, reclaiming the page
+   * gutter, capped inside the visual viewport) in real game layouts.
+   * Default true — game pages get it for free; demos/hero opt out. A CSS
+   * container query already exempts small thumbnails (<320px columns).
+   */
+  grow?: boolean;
 }
 
 export function RotoBoard({
@@ -127,6 +159,7 @@ export function RotoBoard({
   bloomSquares = [],
   evaporateSquares = [],
   ceremonyWinner = null,
+  grow = true,
 }: RotoBoardProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   // The checkmate ceremony overrides the seat rotation: the winning team's
@@ -194,13 +227,15 @@ export function RotoBoard({
     [state],
   );
 
-  const handlePointer = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
+  /** The one tap → square path (pointer AND keyboard-adjacent flows).
+   * getBoundingClientRect() reflects the zoom wrapper's CSS transform, so
+   * this mapping is correct at any zoom/pan without extra math. */
+  const tapAtPoint = useCallback(
+    (clientX: number, clientY: number) => {
       if (!interactive || !onSquareTap || !svgRef.current) return;
-      if (e.button !== 0 && e.pointerType === "mouse") return;
       const rect = svgRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) * VIEWBOX) / rect.width;
-      const y = ((e.clientY - rect.top) * VIEWBOX) / rect.height;
+      const x = ((clientX - rect.left) * VIEWBOX) / rect.width;
+      const y = ((clientY - rect.top) * VIEWBOX) / rect.height;
       const square =
         selected !== null && targetSquares.size > 0
           ? snapToTargets(
@@ -219,10 +254,202 @@ export function RotoBoard({
     [interactive, onSquareTap, rotation, selected, targetSquares, state],
   );
 
+  // --- Zoom viewport: pinch / pan / double-tap / ctrl+wheel ----------------
+  // Transform state lives in a ref and is applied imperatively to the inner
+  // div, so 60Hz gestures never re-render the 128-cell SVG; `isZoomed` is
+  // the only React state (reset button + touch-action) and only flips at
+  // the 1× boundary.
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const zoomContentRef = useRef<HTMLDivElement | null>(null);
+  const zoomRef = useRef({ scale: 1, tx: 0, ty: 0 });
+  const [isZoomed, setIsZoomed] = useState(false);
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const gestureRef = useRef({
+    moved: false,
+    multi: false,
+    startX: 0,
+    startY: 0,
+    panTx: 0,
+    panTy: 0,
+    pinch: null as {
+      dist: number;
+      midX: number;
+      midY: number;
+      scale: number;
+      tx: number;
+      ty: number;
+    } | null,
+    lastTapTime: 0,
+    lastTapX: 0,
+    lastTapY: 0,
+  });
+
+  const applyZoom = useCallback((scale: number, tx: number, ty: number) => {
+    const vp = viewportRef.current;
+    const el = zoomContentRef.current;
+    if (!vp || !el) return;
+    const s = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+    // Pan clamp: the scaled board must always cover the viewport, so it can
+    // never be dragged out of view; at 1× this pins tx = ty = 0.
+    const rect = vp.getBoundingClientRect();
+    const cx = Math.min(0, Math.max(rect.width * (1 - s), tx));
+    const cy = Math.min(0, Math.max(rect.height * (1 - s), ty));
+    zoomRef.current = { scale: s, tx: cx, ty: cy };
+    el.style.transform = `translate(${cx}px, ${cy}px) scale(${s})`;
+    setIsZoomed(s > 1.001);
+  }, []);
+
+  const resetZoom = useCallback(() => applyZoom(1, 0, 0), [applyZoom]);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const pts = pointersRef.current;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const g = gestureRef.current;
+      if (pts.size === 1) {
+        g.moved = false;
+        g.multi = false;
+        g.startX = e.clientX;
+        g.startY = e.clientY;
+        g.panTx = zoomRef.current.tx;
+        g.panTy = zoomRef.current.ty;
+        g.pinch = null;
+      } else {
+        g.multi = true; // never a tap once a second pointer lands
+        if (pts.size === 2) {
+          const vals = [...pts.values()];
+          const a = vals[0]!;
+          const b = vals[1]!;
+          const rect = e.currentTarget.getBoundingClientRect();
+          g.pinch = {
+            dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+            midX: (a.x + b.x) / 2 - rect.left,
+            midY: (a.y + b.y) / 2 - rect.top,
+            scale: zoomRef.current.scale,
+            tx: zoomRef.current.tx,
+            ty: zoomRef.current.ty,
+          };
+        } else {
+          g.pinch = null; // 3+ pointers: hold until fingers lift
+        }
+      }
+    },
+    [],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const pts = pointersRef.current;
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const g = gestureRef.current;
+      if (g.pinch && pts.size >= 2) {
+        const vals = [...pts.values()];
+        const a = vals[0]!;
+        const b = vals[1]!;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+        const scale = Math.min(
+          MAX_ZOOM,
+          Math.max(MIN_ZOOM, (g.pinch.scale * dist) / g.pinch.dist),
+        );
+        const ratio = scale / g.pinch.scale;
+        const midX = (a.x + b.x) / 2 - rect.left;
+        const midY = (a.y + b.y) / 2 - rect.top;
+        // Zoom around the pinch midpoint, then follow the midpoint's travel.
+        applyZoom(
+          scale,
+          midX - (g.pinch.midX - g.pinch.tx) * ratio,
+          midY - (g.pinch.midY - g.pinch.ty) * ratio,
+        );
+        return;
+      }
+      if (g.multi) return; // after a pinch, wait for all pointers to lift
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (!g.moved && dx * dx + dy * dy > TAP_SLOP_PX * TAP_SLOP_PX) {
+        g.moved = true;
+      }
+      if (g.moved && zoomRef.current.scale > 1.001) {
+        applyZoom(zoomRef.current.scale, g.panTx + dx, g.panTy + dy);
+      }
+    },
+    [applyZoom],
+  );
+
+  const handlePointerEnd = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const pts = pointersRef.current;
+      if (!pts.has(e.pointerId)) return;
+      pts.delete(e.pointerId);
+      const g = gestureRef.current;
+      if (pts.size > 0) return; // gesture continues on remaining pointers
+      const wasPinch = g.multi;
+      g.pinch = null;
+      g.multi = false;
+      if (e.type === "pointercancel" || wasPinch || g.moved) return;
+      // A tap. A quick second TOUCH tap nearby toggles zoom instead of
+      // selecting (mouse users have ctrl+wheel and the reset button).
+      const now = e.timeStamp;
+      const isDoubleTap =
+        e.pointerType === "touch" &&
+        now - g.lastTapTime < DOUBLE_TAP_MS &&
+        Math.hypot(e.clientX - g.lastTapX, e.clientY - g.lastTapY) <
+          DOUBLE_TAP_SLOP_PX;
+      g.lastTapTime = isDoubleTap ? 0 : now;
+      g.lastTapX = e.clientX;
+      g.lastTapY = e.clientY;
+      if (isDoubleTap) {
+        const vp = viewportRef.current;
+        if (!vp) return;
+        if (zoomRef.current.scale > 1.001) {
+          resetZoom();
+        } else {
+          const rect = vp.getBoundingClientRect();
+          const { scale, tx, ty } = zoomRef.current;
+          const px = (e.clientX - rect.left - tx) / scale; // board point tapped
+          const py = (e.clientY - rect.top - ty) / scale;
+          applyZoom(2, rect.width / 2 - px * 2, rect.height / 2 - py * 2);
+        }
+        return;
+      }
+      tapAtPoint(e.clientX, e.clientY);
+    },
+    [applyZoom, resetZoom, tapAtPoint],
+  );
+
+  // Desktop nice-to-have: ctrl+wheel zooms around the cursor. Native
+  // listener because React's onWheel is passive — preventDefault must win
+  // over the browser's page zoom.
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return; // plain wheel keeps scrolling the page
+      e.preventDefault();
+      const rect = vp.getBoundingClientRect();
+      const { scale, tx, ty } = zoomRef.current;
+      const next = Math.min(
+        MAX_ZOOM,
+        Math.max(MIN_ZOOM, scale * Math.exp(-e.deltaY * 0.002)),
+      );
+      const ratio = next / scale;
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      applyZoom(next, mx - (mx - tx) * ratio, my - (my - ty) * ratio);
+    };
+    vp.addEventListener("wheel", onWheel, { passive: false });
+    return () => vp.removeEventListener("wheel", onWheel);
+  }, [applyZoom]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
       if (!interactive) return;
       if (e.key === "Escape") {
+        // Zoom never traps keyboard users: Escape always restores 1×.
+        if (zoomRef.current.scale > 1.001) resetZoom();
         if (selected !== null && onSquareTap) {
           // Tapping the selected square deselects — same path as a pointer tap.
           onSquareTap(selected);
@@ -258,7 +485,15 @@ export function RotoBoard({
       setCursor(next);
       setAnnouncement(describeSquare(next));
     },
-    [interactive, cursor, selected, onSquareTap, orientation, describeSquare],
+    [
+      interactive,
+      cursor,
+      selected,
+      onSquareTap,
+      orientation,
+      describeSquare,
+      resetZoom,
+    ],
   );
 
   // Announce selection results ("Knight selected, 5 destinations").
@@ -348,19 +583,32 @@ export function RotoBoard({
       tabIndex={interactive ? 0 : undefined}
       onKeyDown={handleKeyDown}
     >
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}
-        className={className}
-        role="group"
-        aria-label="Roto Chess board"
-        onPointerDown={handlePointer}
-        style={{
-          touchAction: "manipulation",
-          userSelect: "none",
-          display: "block",
-        }}
+      {/* Zoom viewport: overflow-hidden window over a transformed inner div.
+          touch-action: at 1× vertical swipes pass through to page scroll
+          (pan-y) while pinches reach us; once zoomed we own every gesture. */}
+      <div
+        ref={viewportRef}
+        className={
+          grow ? "board-zoom-viewport board-grow" : "board-zoom-viewport"
+        }
+        style={{ touchAction: isZoomed ? "none" : "pan-y" }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
       >
+        <div ref={zoomContentRef} className="board-zoom-content">
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}
+            className={className}
+            role="group"
+            aria-label="Roto Chess board"
+            style={{
+              userSelect: "none",
+              display: "block",
+            }}
+          >
         <g
           transform={`rotate(${rotation} ${CENTER} ${CENTER})`}
           className={ceremonyWinner !== null ? "ceremony-rotation" : undefined}
@@ -419,6 +667,31 @@ export function RotoBoard({
               style={ceremony ? { animationDelay: `${i * 80}ms` } : undefined}
             />
           ))}
+          {/* Active-turn arc: a thin seat-colored arc along the outer rim
+              spanning the active seat's 8-rank home quadrant (meridian ±45°).
+              Keyed by seat → one soft CSS fade-in per turn change, then it
+              holds still; hidden during the checkmate ceremony so it never
+              competes with the gold rim inscription. */}
+          {ceremonyWinner === null &&
+            (() => {
+              const seatDeg = (state.activeSeat - 1) * 90;
+              const a = polarPoint(seatDeg - TURN_ARC_HALF_DEG, TURN_ARC_R);
+              const b = polarPoint(seatDeg + TURN_ARC_HALF_DEG, TURN_ARC_R);
+              return (
+                <path
+                  key={`turn-arc-${state.activeSeat}`}
+                  d={`M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${TURN_ARC_R} ${TURN_ARC_R} 0 0 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`}
+                  fill="none"
+                  stroke={SEAT_BRIGHT[state.activeSeat]}
+                  strokeWidth={3.5}
+                  strokeLinecap="round"
+                  opacity={0.85}
+                  className="turn-arc"
+                  pointerEvents="none"
+                  data-testid="turn-arc"
+                />
+              );
+            })()}
           {/* Check: static vermilion ring + a one-shot radial ripple that
               plays once when the check appears (keyed per square). */}
           {checkedKings.map((sq) => {
@@ -713,6 +986,20 @@ export function RotoBoard({
           const eastRing = seat === 2;
           return (
             <g key={`dot-${seat}`}>
+              {/* Active seat's badge brightens: a soft seat-colored halo ring
+                  mounts with the turn (same one-shot fade as the rim arc). */}
+              {active && (
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={r + 3.5}
+                  fill="none"
+                  stroke={SEAT_BRIGHT[seat]}
+                  strokeWidth={1.4}
+                  opacity={0.5}
+                  className="turn-arc"
+                />
+              )}
               {eastRing ? (
                 <>
                   <circle
@@ -757,6 +1044,37 @@ export function RotoBoard({
           );
         })}
       </svg>
+        </div>
+      </div>
+      {/* Floating zoom reset — rendered (and tabbable) only while zoomed,
+          so keyboard flow is untouched at 1×. */}
+      {isZoomed && (
+        <button
+          type="button"
+          className="board-zoom-reset"
+          aria-label="Reset board zoom"
+          title="Reset zoom"
+          onClick={resetZoom}
+        >
+          <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden="true">
+            <circle
+              cx="12"
+              cy="12"
+              r="6.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+            <circle cx="12" cy="12" r="1.7" fill="currentColor" />
+            <path
+              d="M12 1.5v4.2M12 18.3v4.2M1.5 12h4.2M18.3 12h4.2"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
       {/* Screen-reader narration: cursor position, selection results, moves. */}
       <div aria-live="polite" role="status" style={VISUALLY_HIDDEN}>
         {announcement}

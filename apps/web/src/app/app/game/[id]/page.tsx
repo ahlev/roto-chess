@@ -5,20 +5,22 @@
  * live (board + confirm bar + history), game-over (result sheet over a
  * still-readable board).
  */
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  SEAT_COMPASS,
   gameToRotoPgn,
   parseGame,
+  partnerOf,
   type Seat,
 } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { NotationList } from "@/components/game/NotationList";
-import { ChatPanel } from "@/components/game/ChatPanel";
+import { ChatPanel, type ChatOpenRequest } from "@/components/game/ChatPanel";
 import { EndGameActions } from "@/components/game/EndGameActions";
+import { SeatPlaques } from "@/components/game/SeatPlaques";
+import { emitAttention } from "@/components/game/attention";
 import { useOnlineGame } from "@/components/game/useOnlineGame";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
@@ -30,13 +32,6 @@ const SEAT_NAME: Record<Seat, string> = {
   4: "West",
 };
 
-const SEAT_TEXT: Record<Seat, string> = {
-  1: "text-[color:var(--north-red-bright)]",
-  2: "text-[color:var(--east-black-bright)]",
-  3: "text-[color:var(--south-blue-bright)]",
-  4: "text-[color:var(--west-gold-bright)]",
-};
-
 export default function GameRoomPage({
   params,
 }: {
@@ -46,10 +41,38 @@ export default function GameRoomPage({
   const game = useOnlineGame(id);
   const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [chatRequest, setChatRequest] = useState<ChatOpenRequest | null>(null);
 
   const orientation: Seat = game.mySeat ?? 1;
   const openingStep =
     game.state && game.state.ply < 20 ? (game.stagedFirst ? 2 : 1) : null;
+
+  const isMyTurn =
+    game.gameStatus === "active" &&
+    game.mySeat !== null &&
+    game.state !== null &&
+    game.state.activeSeat === game.mySeat;
+
+  // Attention event on the your-turn edge (the visual pill is below; a
+  // board glow ships separately). sound: your-turn
+  const wasMyTurnRef = useRef(false);
+  useEffect(() => {
+    if (isMyTurn && !wasMyTurnRef.current) emitAttention("your-turn");
+    wasMyTurnRef.current = isMyTurn;
+  }, [isMyTurn]);
+
+  // Clicking your PARTNER's plaque opens the Partners line; anyone else's
+  // opens the whole-table channel.
+  const openChatFor = useCallback(
+    (seat: Seat) => {
+      const channel =
+        game.mySeat !== null && seat === partnerOf(game.mySeat)
+          ? ("partners" as const)
+          : ("table" as const);
+      setChatRequest((prev) => ({ channel, nonce: (prev?.nonce ?? 0) + 1 }));
+    },
+    [game.mySeat],
+  );
 
   const statusLine = useMemo(() => {
     if (!game.state) return "";
@@ -117,26 +140,16 @@ export default function GameRoomPage({
           interactive={false}
           className="w-full opacity-90"
         />
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-4">
           {/* RLS admits only participants to this page, so everyone here is
               already seated — empty plaques are invitations for the LINK,
               not buttons. Joining happens through /join/[code]. */}
-          {([1, 2, 3, 4] as const).map((seat) => {
-            const taken = game.seats.find((s) => s.seat === seat);
-            return (
-              <div
-                key={seat}
-                className={`rounded-lg border border-line p-3 text-sm ${SEAT_TEXT[seat]}`}
-              >
-                <span className="font-semibold">
-                  {SEAT_COMPASS[seat]} · {SEAT_NAME[seat]}
-                </span>
-                <div className="mt-1 text-text-dim">
-                  {taken ? taken.displayName : "open — send the link"}
-                </div>
-              </div>
-            );
-          })}
+          <SeatPlaques
+            seats={game.seats}
+            mySeat={game.mySeat}
+            activeSeat={null}
+            vacantHint="open — send the link"
+          />
         </div>
         <div className="mt-4 rounded-lg border border-line bg-surface p-3 text-center">
           <p className="text-xs text-text-dim">Fill the seats</p>
@@ -166,36 +179,43 @@ export default function GameRoomPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col px-3 pb-28">
       <Header />
-      <div className="flex items-center justify-between pb-1 text-xs text-text-dim">
-        <div className="flex gap-2">
-          {game.seats.map((s) => (
-            <span
-              key={s.seat}
-              className={`${SEAT_TEXT[s.seat]} ${
-                game.state?.activeSeat === s.seat ? "font-bold" : ""
-              }`}
-            >
-              {SEAT_COMPASS[s.seat]}·{s.displayName}
-              {s.seat === game.mySeat ? " (you)" : ""}
-            </span>
-          ))}
-        </div>
+      <SeatPlaques
+        seats={game.seats}
+        mySeat={game.mySeat}
+        activeSeat={game.gameStatus === "active" ? game.state.activeSeat : null}
+        onSeatClick={openChatFor}
+      />
+
+      <div className="relative py-2">
+        <p
+          aria-live="polite"
+          data-testid="status-line"
+          className="px-16 text-center text-sm text-text-dim"
+        >
+          {isMyTurn ? (
+            <>
+              {/* Strong your-turn treatment; a board-level glow ships
+                  separately. */}
+              <span className="inline-block rounded-full bg-[color:var(--focus-ring)] px-3 py-0.5 text-sm font-bold text-[color:var(--ink)]">
+                Your move
+              </span>
+              <span className="ml-2">
+                The table is watching.
+                {openingStep ? ` Move ${openingStep} of 2.` : ""}
+              </span>
+            </>
+          ) : (
+            statusLine
+          )}
+        </p>
         <button
           type="button"
-          className="rounded-full border border-line px-2 py-1"
+          className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full border border-line px-2 py-1 text-xs text-text-dim"
           onClick={() => setShowHistory((v) => !v)}
         >
           {showHistory ? "Board" : "History"}
         </button>
       </div>
-
-      <p
-        aria-live="polite"
-        data-testid="status-line"
-        className="pb-2 text-center text-sm text-text-dim"
-      >
-        {statusLine}
-      </p>
 
       {game.submitError && (
         <p
@@ -277,6 +297,9 @@ export default function GameRoomPage({
             tableId={game.tableId}
             gameId={game.gameId}
             myUserId={game.myUserId}
+            seats={game.seats}
+            mySeat={game.mySeat}
+            openRequest={chatRequest}
           />
         </div>
       )}

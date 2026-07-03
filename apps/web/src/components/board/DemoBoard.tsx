@@ -93,6 +93,8 @@ export function DemoBoard({
           setPreview(null);
         }}
         className="w-full"
+        // Demos sit in prose grids/columns — never outgrow them.
+        grow={false}
       />
       {caption && (
         <figcaption

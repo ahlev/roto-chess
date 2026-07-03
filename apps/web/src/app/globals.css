@@ -279,3 +279,75 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===========================================================================
+   APPENDED — board upgrades (owned by components/board/RotoBoard.tsx):
+   size grow, pinch-zoom viewport, active-turn indicator. Append-only block.
+=========================================================================== */
+
+/* Board sizing: the wrap centers a zoom viewport that may outgrow its
+   column. The container query exempts thumbnails (dashboard cards, seat
+   previews under 320px); real game columns reclaim the page gutter, capped
+   just inside the visual viewport so nothing ever scrolls horizontally. */
+.roto-board-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  container-type: inline-size;
+}
+.board-zoom-viewport {
+  width: 100%;
+  flex: none;
+  overflow: hidden;
+}
+@container (min-width: 320px) {
+  .board-zoom-viewport.board-grow {
+    width: min(106%, calc(100vw - 8px));
+    width: min(106%, calc(100dvw - 8px));
+  }
+}
+/* The transformed layer — RotoBoard drives its transform imperatively
+   (translate+scale, origin 0 0) so gestures never re-render the SVG. */
+.board-zoom-content {
+  width: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* Floating zoom reset — bottom-right of the board, rendered only while
+   zoomed. 44px hit target; palette-native ghost button. */
+.board-zoom-reset {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  opacity: 0.92;
+  cursor: pointer;
+}
+.board-zoom-reset:hover,
+.board-zoom-reset:focus-visible {
+  color: var(--text);
+  opacity: 1;
+}
+
+/* Active-turn indicator (rim arc + seat-badge halo): ONE soft fade-in when
+   the turn changes (elements remount keyed by seat), then it holds still —
+   attention without ceremony, no infinite pulse. Reduced motion collapses
+   it via the global media query above. */
+@keyframes turn-arc-in {
+  from {
+    opacity: 0;
+  }
+}
+.turn-arc {
+  animation: turn-arc-in 400ms ease-out backwards;
+}

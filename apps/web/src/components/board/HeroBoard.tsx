@@ -80,6 +80,8 @@ export function HeroBoard({ className }: { className?: string }) {
       interactive={false}
       lastMove={lastMove}
       className={className ?? ""}
+      // The hero shares its column with marketing copy — never outgrow it.
+      grow={false}
     />
   );
 }

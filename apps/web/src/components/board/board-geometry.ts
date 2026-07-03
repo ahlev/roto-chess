@@ -26,11 +26,13 @@ import {
   type Square,
 } from "@rotochess/engine";
 
-// 600 leaves just enough margin for the meridian overhang + strokes; the
-// annulus fills 93% of the box so a 351pt phone render keeps its cells at
-// the spec's tap-target sizes (a 680 box wasted 60 units per side).
-export const VIEWBOX = 600;
-export const CENTER = VIEWBOX / 2; // 300
+// 576 leaves just enough margin for the meridian overhang (r≈284 with its
+// stroke cap) and the active-turn rim arc (outer edge ≈286.75); the annulus
+// fills 97% of the box so phone renders keep the spec's tap-target sizes
+// (a 600 box wasted 20 units per side; 680 wasted 60). OUTER_R itself is
+// load-bearing elsewhere (the ceremony rim dasharray 1760 = 2π·280).
+export const VIEWBOX = 576;
+export const CENTER = VIEWBOX / 2; // 288
 export const INNER_R = 120;
 export const OUTER_R = 280;
 export const RING_W = (OUTER_R - INNER_R) / FILE_COUNT; // 40
@@ -252,7 +254,7 @@ export function snapToTargets(
   rotationDeg: number,
   targets: ReadonlySet<Square>,
   isProtected: (sq: Square) => boolean,
-  radius = 38, // ≈22pt at a 351pt render of the 600 viewBox
+  radius = 38, // ≈23pt at a 351pt render of the 576 viewBox
 ): Square | null {
   const direct = hitTest(x, y, rotationDeg);
   if (direct !== null && targets.has(direct)) return direct;
