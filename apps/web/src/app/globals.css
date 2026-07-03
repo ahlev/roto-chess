@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/**
+ * "Midnight Orrery" — design tokens verbatim from the creative direction
+ * consultation (§2). Dark warm espresso frame; the cream board carries the
+ * light; all chroma belongs to the four armies and the meridian red.
+ * Light "Compendium mode" (paper) is scoped by .compendium on rules and
+ * marketing pages.
+ */
+:root {
+  /* Neutrals — dark (game room) */
+  --bg: #17130e; /* espresso ink */
+  --surface: #211b14;
+  --surface-raised: #2b241b;
+  --line: #3c3327;
+  --text: #efe6d6; /* 13.9:1 on --bg */
+  --text-dim: #b0a490; /* 7.1:1 on --bg */
+
+  /* Neutrals — light (compendium) */
+  --paper: #f3ebdd;
+  --paper-raised: #fbf6ec;
+  --ink: #26201a; /* 13.4:1 on paper */
+  --ink-dim: #6b5f4e; /* 5.6:1 */
+  --rule-red: #a8352a; /* meridian red for hairlines */
+
+  /* Player accents — -bright for dark bg (≥4.6:1), -strong for light (≥4.5:1) */
+  --north-red-bright: #e5705f;
+  --north-red-strong: #9e3325;
+  --east-black-bright: #c7bcac;
+  --east-black-strong: #33302b; /* "onyx" — form carries identity */
+  --south-blue-bright: #7fa9dc;
+  --south-blue-strong: #2e5e96;
+  --west-gold-bright: #d9ae4e;
+  --west-gold-strong: #7e621f;
+
+  /* Semantics — form-first, color-second. Never hue alone. */
+  --check: #ff5a45; /* vermilion pulse — always with the pulse motif */
+  --halo: #f2d27c; /* radiant pale gold — always a RING, never a fill */
+  --evaporate: #8fa6a0; /* cool ash-teal mist */
+  --danger: #d65745;
+  --success: #8faf7e;
+  --focus-ring: #e8d9b8;
+
+  /* Board surface (the annulus itself — matches the canonical diagram) */
+  --board-cream: #f0e6d2;
+  --board-umber: #b09a78;
+  --board-meridian: #a8352a;
+
+  /* Piece fills (consultation 02 §5) */
+  --piece-red: #b5342a;
+  --piece-blue: #2f62a8;
+  --piece-gold: #c9962e;
+  --piece-black: #26201a;
+  --piece-outline: #26201a;
+  --piece-cream-detail: #f3ebdd;
+
+  /* Motion durations (UX consultation §6) */
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 400ms;
+  --dur-ceremony: 700ms;
+  --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-text-dim: var(--text-dim);
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-rule-red: var(--rule-red);
+  --color-north: var(--north-red-bright);
+  --color-east: var(--east-black-bright);
+  --color-south: var(--south-blue-bright);
+  --color-west: var(--west-gold-bright);
+  --color-north-strong: var(--north-red-strong);
+  --color-east-strong: var(--east-black-strong);
+  --color-south-strong: var(--south-blue-strong);
+  --color-west-strong: var(--west-gold-strong);
+  --color-check: var(--check);
+  --color-halo: var(--halo);
+  --color-evaporate: var(--evaporate);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-focus: var(--focus-ring);
+  --font-display: var(--font-instrument-serif);
+  --font-sans: var(--font-instrument-sans);
+  --font-book: var(--font-source-serif);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-instrument-sans), system-ui, sans-serif;
+}
+
+/* Compendium mode: rules & marketing pages read like paper. */
+.compendium {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Focus visibility (a11y): a warm ring, never removed. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: the app also offers an in-app override; this is the OS layer. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
