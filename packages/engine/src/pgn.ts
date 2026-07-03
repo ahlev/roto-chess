@@ -324,7 +324,8 @@ export function parseGame(text: string): ParsedGame {
     if (!line) continue;
     const h = line.match(/^\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]$/u);
     if (h) {
-      const key = KEY_MAP[(h[1] as string).toLowerCase()] ?? (h[1]);
+      const rawKey = h[1] ?? "";
+      const key = KEY_MAP[rawKey.toLowerCase()] ?? rawKey;
       const value = (h[2] as string)
         .replace(/\\"/gu, '"')
         .replace(/\\\\/gu, "\\");
