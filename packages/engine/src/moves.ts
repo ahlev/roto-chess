@@ -91,7 +91,12 @@ export function moveMatchesRef(move: Move, ref: MoveRef): boolean {
   );
 }
 
-/** Two generated moves are effect-identical if applying either yields the same result. */
+/**
+ * Two generated moves are effect-identical if applying either yields the
+ * same result AND the same record (avenger is state-inert but appears in
+ * notation as ^, so it counts — otherwise the † / ^ suffix would depend on
+ * which of two merged paths survived dedup).
+ */
 export function movesEffectIdentical(a: Move, b: Move): boolean {
   return (
     a.from === b.from &&
@@ -101,6 +106,7 @@ export function movesEffectIdentical(a: Move, b: Move): boolean {
     (a.promotion ?? null) === (b.promotion ?? null) &&
     (a.castle ?? null) === (b.castle ?? null) &&
     (a.earnsHalo ?? false) === (b.earnsHalo ?? false) &&
-    (a.evaporates ?? false) === (b.evaporates ?? false)
+    (a.evaporates ?? false) === (b.evaporates ?? false) &&
+    (a.avenger ?? false) === (b.avenger ?? false)
   );
 }

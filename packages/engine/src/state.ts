@@ -81,7 +81,12 @@ export interface BoardState {
    * this.
    */
   startPieceMoved: readonly boolean[];
-  epTarget: EpTarget | null;
+  /**
+   * Open en passant windows. An ARRAY because an opening double-move turn
+   * can double-step a pawn on EACH side of the meridian — two targets from
+   * one turn. Cleared after the immediately-following player's turn (R5).
+   */
+  epTargets: readonly EpTarget[];
   /**
    * Avenger memory (§6.4, ruling R4): per team, has a piece been captured
    * while still unmoved on its original starting square? Permanent once set.
@@ -163,7 +168,7 @@ export function initialState(): BoardState {
     activeSeat: 1,
     ply: 0,
     startPieceMoved: new Array<boolean>(SQUARE_COUNT).fill(false),
-    epTarget: null,
+    epTargets: [],
     avengeableLoss: [false, false],
     halfmoveClock: 0,
     repetition: {},
@@ -207,8 +212,54 @@ export function deserializeState(json: string): BoardState {
   if (!SEATS.includes(state.activeSeat)) {
     throw new Error(`Invalid state: activeSeat ${String(state.activeSeat)}`);
   }
+  if (!Array.isArray(state.epTargets)) {
+    throw new Error("Invalid state: epTargets must be an array");
+  }
+  for (const raw of state.epTargets as readonly unknown[]) {
+    const t = raw as Partial<EpTarget> | null;
+    if (
+      typeof t !== "object" || t === null ||
+      typeof t.square !== "number" || typeof t.pawnSquare !== "number" ||
+      typeof t.createdAtPly !== "number" ||
+      !SEATS.includes(t.bySeat as Seat)
+    ) {
+      throw new Error("Invalid state: malformed epTarget");
+    }
+  }
   if (typeof state.ply !== "number" || state.ply < 0) {
     throw new Error("Invalid state: ply");
+  }
+  if (typeof state.halfmoveClock !== "number" || state.halfmoveClock < 0) {
+    throw new Error("Invalid state: halfmoveClock");
+  }
+  if (
+    typeof state.repetition !== "object" ||
+    state.repetition === null ||
+    Array.isArray(state.repetition)
+  ) {
+    throw new Error("Invalid state: repetition");
+  }
+  if (
+    !Array.isArray(state.avengeableLoss) ||
+    state.avengeableLoss.length !== 2 ||
+    (state.avengeableLoss as readonly unknown[]).some(
+      (b) => typeof b !== "boolean",
+    )
+  ) {
+    throw new Error("Invalid state: avengeableLoss");
+  }
+  for (const raw of state.board as readonly unknown[]) {
+    if (raw === null) continue;
+    const piece = raw as Partial<Piece>;
+    if (
+      typeof piece !== "object" ||
+      typeof piece.kind !== "string" ||
+      !"KQRBNP".includes(piece.kind) ||
+      !SEATS.includes(piece.seat as Seat) ||
+      typeof piece.origin !== "number"
+    ) {
+      throw new Error("Invalid state: malformed piece");
+    }
   }
   return state;
 }

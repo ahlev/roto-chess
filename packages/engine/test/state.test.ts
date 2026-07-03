@@ -111,7 +111,7 @@ describe("initial position (§2.5–2.7)", () => {
     expect(state.ply).toBe(0);
     expect(inOpening(state)).toBe(true);
     expect(roundOf(state.ply)).toBe(1);
-    expect(state.epTarget).toBeNull();
+    expect(state.epTargets).toEqual([]);
     expect(state.avengeableLoss).toEqual([false, false]);
     expect(state.halfmoveClock).toBe(0);
     expect(state.repetition).toEqual({});
@@ -134,17 +134,19 @@ describe("serialization", () => {
     expect(restored).toEqual(state);
   });
 
-  it("round-trips a mid-game state with epTarget and repetition populated", () => {
+  it("round-trips a mid-game state with epTargets and repetition populated", () => {
     const state = {
       ...initialState(),
       activeSeat: 3 as const,
       ply: 9,
-      epTarget: {
-        square: parseSquare("11B"),
-        pawnSquare: parseSquare("12B"),
-        bySeat: 2 as const,
-        createdAtPly: 8,
-      },
+      epTargets: [
+        {
+          square: parseSquare("11B"),
+          pawnSquare: parseSquare("12B"),
+          bySeat: 2 as const,
+          createdAtPly: 8,
+        },
+      ],
       avengeableLoss: [true, false] as const,
       halfmoveClock: 4,
       repetition: { somekey: 2, otherkey: 1 },

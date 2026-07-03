@@ -181,6 +181,146 @@ side by traveling there, which reads as against the rule's development purpose
 
 ---
 
+## R9 — Partner pieces are friendly (blocking, capture, and check)
+
+**The decision.** The rulebook consistently says pieces capture "opposing"
+pieces and that check comes from "an opposing piece" (§6.2, §7.1), but never
+states outright whether you may capture your PARTNER's pieces or whether a
+partner's piece could ever threaten your king.
+
+**V1 assumes: partner pieces are fully friendly.** They block movement like
+your own pieces, cannot be captured, and never deliver check. This is the
+standard team-chess reading and the only one consistent with the rulebook's
+"opposing" language throughout.
+
+**Keep vs. change.** Changing this would be a different game (sacrificing your
+partner's pieces for tempo). Encoded in one place: the `isEnemy` predicate.
+
+---
+
+## R10 — §3.3 erratum: move-notation examples use the dead coordinate order
+
+**The discovery.** §3.3's examples — `NC32–B30`, `RA1xA8` — write coordinates
+file-first ("C32"), the **pre-v3.0 convention**. §2.2/§3.2 define rank-first
+(`32D`, `1A`) and the v3.0 revision history says the order was deliberately
+swapped. Andrew's chat digest also warns that any earlier-convention example is
+invalid. These two examples appear to have survived the revision unconverted.
+
+**V1 assumes rank-first everywhere**, per §2.2 and the Roto-PGN spec: the
+knight example reads `N32C-30B`, the rook capture `R1Ax8A`. All notation
+examples in the app and docs are engine-generated, never hand-written
+(Andrew's own rule from the planning chat).
+
+**Action for Andrew:** update the two §3.3 example tokens in rulebook v3.2.
+
+---
+
+## R11 — May the same piece make both opening submoves?
+
+**The decision.** §4.2 requires one move on each side of your meridian. If a
+piece's first submove carries it ACROSS the meridian (kings/queens freely,
+haloed pieces, or an evaporation-immune mover), it now stands on the other
+side. May it also make the second submove? *Example: your queen sweeps from
+2B across the meridian to 32B (submove 1, clockwise side), then continues
+30B (submove 2, counterclockwise side — its new origin).*
+
+**V1 assumes: yes.** §4.2 constrains the SIDES of the two moves (judged by
+each move's origin square, R8) — it never says two different pieces must
+move. App. A.2's development rationale is arguably diluted, which is why
+this deserves your eye.
+
+**Keep vs. change.** Changing to "two distinct pieces" is a one-line flip:
+`OPENING_MAY_MOVE_SAME_PIECE_TWICE` in `rulings.ts`. Only affects rounds 1–5.
+
+---
+
+## R12 — Kings are never capturable
+
+**The decision.** The rulebook never says what happens if a king could be
+"taken," because in two-player chess it can't happen. In Roto it CAN: §7.3
+delays mate until the victim's turn, and §7.2 lets the partner ignore it, so a
+checked king can legally sit attacked through other players' turns — and a
+third player's piece may bear on it.
+
+**V1 assumes: kings are never capture targets.** They block movement like any
+piece but no move may take one; games end by checkmate alone (§1.2). This is
+the only reading consistent with §7.3 — a mate that must wait for the victim's
+turn cannot be pre-empted by simply grabbing the king.
+
+**Keep vs. change.** The alternative (king capture = instant win) is a
+materially different game. Structural guard: `isCapturable` in the engine.
+
+---
+
+## R13 — A bishop may stop anywhere along its curl
+
+**The decision.** §5.4 says the move "ends when the bishop reaches a rail
+(with no remaining bounces), is blocked by a friendly piece, or captures."
+Read hyper-literally, that's a FORCED slide to one of those endpoints. Read as
+standard chess (§1.3), sliders may stop voluntarily on any square along the
+way — and the bounce is likewise optional (the bishop may stop on the rail
+square instead of reflecting).
+
+**V1 assumes the standard-chess reading: voluntary stops anywhere along the
+chain, bounce optional.** The §5.4 sentence describes where the path CANNOT
+continue, not a movement mandate.
+
+**Keep vs. change.** Forced maximal slides would be a drastically different
+(and strange) game; we're confident here, but it's an interpretation and you
+should ratify it. Code: the generators emit every intermediate square.
+
+---
+
+## R14 — The Avenger exemption applies automatically (not declinable)
+
+**The decision.** §6.4 says an eligible piece "may cross… penalty-free." Does
+"may" make the exemption OPTIONAL — could a player deliberately evaporate an
+eligible piece (to vacate a square, or to avoid stalemate)?
+
+**V1 assumes the exemption auto-applies:** an eligible avenger crossing its
+meridian never evaporates. "May" reads as permission to cross, not a choice of
+penalty. This slightly changes the legal-move set in exotic corners.
+
+**Keep vs. change.** Making it declinable would generate a second, evaporating
+variant of each eligible crossing (a confirm-bar choice in the UI). One
+generator change if ever wanted.
+
+---
+
+## R15 — Fifty-move details (§8.6)
+
+**The decision(s).** Two small counter questions: (1) does a double-move
+opening turn increment the fifty-move counter by 1 or 2? (2) does an
+EVAPORATION (material loss without capture) reset it?
+
+**V1 assumes:** (1) an opening turn counts as ONE move — §8.6 says a move "means
+one player's turn"; (2) evaporation does NOT reset the counter — §8.6 names
+only pawn moves and captures, read literally. (Practical impact of both is
+nearly nil: the clock can't approach 50 during the opening, and evaporations
+are usually near captures anyway.)
+
+---
+
+## R16 — Two en passant consequences of the circle (documented behaviors)
+
+**The decisions.** Four-player circular geometry creates two EP situations
+standard chess can't produce; V1 encodes the natural reading of each:
+
+1. **A trailing same-direction enemy pawn may EP-capture.** On a ring, enemy
+   pawns can travel the SAME rotational direction as yours. If an enemy pawn
+   double-steps past your pawn's diagonal, the §8.1 test ("could have captured
+   it had it advanced only one") is met regardless of which direction the
+   victim was traveling. V1 allows it.
+2. **EP dies if the landing square is occupied.** If the passed-over square is
+   occupied by the time of the capture attempt (possible mid-opening when the
+   double-stepper's own second submove lands there), no EP move exists — a
+   normal capture of the occupant is offered instead where legal.
+
+**Keep vs. change.** Both follow from applying §8.1 mechanically; flagged so
+nothing about EP is silent.
+
+---
+
 ## P1 — Policy: abandonment (community feel, not rules)
 
 **The decision.** What happens when a player goes silent? The rulebook is
