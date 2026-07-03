@@ -12,10 +12,15 @@ import {
 import type { BoardState } from "../src/state.js";
 import type { Move, Turn } from "../src/moves.js";
 import {
+  formatSquareToken,
+  moveToDisplay,
   moveToToken,
   parseGame,
+  parseSquareToken,
   serializeGame,
+  turnToDisplay,
   turnToToken,
+  validateGameText,
 } from "../src/pgn.js";
 import {
   gameFromRotoPgn,
@@ -132,19 +137,17 @@ describe("round-trip property", () => {
       for (const seed of [11, 222, 3333, 44444]) {
         const turns = randomTurns(seed, 32);
         expect(turns.length).toBeGreaterThan(5);
-        const text = serializeGame({
-          headers: { event: `Seed ${seed}`, north: "N", east: "E", south: "S", west: "W" },
-          turns,
-        });
+        const headers = {
+          event: `Seed ${seed}`,
+          player1: "N", player2: "E", player3: "S", player4: "W",
+        };
+        const text = serializeGame({ headers, turns });
         const parsed = parseGame(text);
         expect(parsed.turns.length, `seed ${seed}`).toBe(turns.length);
         const original = playGame(turns).finalState;
         expect(parsed.finalState, `seed ${seed}`).toEqual(original);
         // And the reserialization is byte-identical (canonical form):
-        const text2 = serializeGame({
-          headers: { event: `Seed ${seed}`, north: "N", east: "E", south: "S", west: "W" },
-          turns: parsed.turns,
-        });
+        const text2 = serializeGame({ headers, turns: parsed.turns });
         expect(text2).toBe(text);
       }
     },
@@ -157,14 +160,52 @@ describe("round-trip property", () => {
         event: "The Thursday Board",
         site: "rotochess.app",
         date: "2026.07.03",
-        north: "Cashin", east: "GK", south: "Danny", west: "Andrew",
+        player1: "Cashin", player2: "GK", player3: "Danny", player4: "Andrew",
       },
       turns,
     });
     const parsed = parseGame(text);
     expect(parsed.headers.event).toBe("The Thursday Board");
-    expect(parsed.headers.west).toBe("Andrew");
+    expect(parsed.headers.player4).toBe("Andrew");
     expect(parsed.headers.result).toBe("*");
+    expect(parsed.headers.team13).toBe("Players 1 & 3");
+    expect(parsed.headers.team24).toBe("Players 2 & 4");
+  });
+
+  it("emits the TDD §3.8 header set in spec order", () => {
+    const turns = randomTurns(7, 8);
+    const text = serializeGame({
+      headers: {
+        event: "Spec headers",
+        date: "2026.07.03",
+        player1: "A", player2: "B", player3: "C", player4: "D",
+      },
+      turns,
+    });
+    const headerLines = text
+      .split("\n")
+      .filter((l) => l.startsWith("["))
+      .map((l) => l.slice(1, l.indexOf(" ")));
+    expect(headerLines).toEqual([
+      "Event", "Date", "Player1", "Player2", "Player3", "Player4",
+      "Team13", "Team24", "Result", "Variant",
+    ]);
+    expect(text).toContain('[Variant "Roto Chess v3.1"]');
+  });
+
+  it("movetext is round-grouped with P1:–P4: labels and spaced &", () => {
+    const turns = randomTurns(11, 8);
+    const text = serializeGame({ turns });
+    const movetext = text
+      .split("\n")
+      .filter((l) => l && !l.startsWith("["))
+      .join(" ");
+    expect(movetext).toMatch(/^1\. P1: /u);
+    expect(movetext).toContain("2. P1:");
+    expect(movetext).toContain("P2:");
+    expect(movetext).toContain("P4:");
+    expect(movetext).toContain(" & "); // opening submoves, spaced
+    expect(movetext).not.toMatch(/\S&/u); // never unspaced in the file
   });
 });
 
@@ -186,15 +227,15 @@ describe("game layer", () => {
     expect(parsed.turns.length).toBe(turns.length);
   });
 
-  it("resultHeaderOf maps teams to compass pairs", () => {
+  it("resultHeaderOf maps teams to the spec's 13/24/Draw values", () => {
     expect(
       resultHeaderOf({ kind: "checkmate", matedSeat: 1, winningTeam: 2 }),
-    ).toBe("EW");
+    ).toBe("24");
     expect(
       resultHeaderOf({ kind: "checkmate", matedSeat: 2, winningTeam: 1 }),
-    ).toBe("NS");
+    ).toBe("13");
     expect(resultHeaderOf({ kind: "stalemate", stalematedSeat: 3 })).toBe(
-      "draw",
+      "Draw",
     );
   });
 
@@ -203,6 +244,189 @@ describe("game layer", () => {
     const text = serializeGame({ turns });
     const corrupted = text.replace(/P(\d+)B-/u, "P$1C-");
     expect(() => parseGame(corrupted)).toThrow();
+  });
+});
+
+describe("square-token order (unresolved upstream — parser accepts both)", () => {
+  it("rank-first and file-first tokens parse to the same square", () => {
+    expect(parseSquareToken("32D")).toBe(parseSquareToken("D32"));
+    expect(parseSquareToken("1A")).toBe(parseSquareToken("A1"));
+    expect(parseSquareToken("17C")).toBe(parseSquareToken("C17"));
+    // Emission is currently rank-first (one place to flip when ruled):
+    expect(formatSquareToken(parseSquareToken("D32"))).toBe("32D");
+  });
+
+  it("a whole game rewritten file-first replays identically", () => {
+    const turns = randomTurns(31, 24);
+    const text = serializeGame({ turns });
+    const fileFirst = text.replace(
+      /([KQRBNP])([0-9]{1,2})([A-D])([-x])([0-9]{1,2})([A-D])/gu,
+      "$1$3$2$4$6$5",
+    );
+    expect(fileFirst).not.toBe(text);
+    const parsed = parseGame(fileFirst);
+    expect(parsed.turns.length).toBe(turns.length);
+    expect(parsed.finalState).toEqual(playGame(turns).finalState);
+  });
+});
+
+describe("legacy-format leniency (old exports and DB movetext still load)", () => {
+  it("bare unlabeled movetext with unspaced & (the DB form) parses", () => {
+    const turns = randomTurns(17, 24);
+    let state = initialState();
+    const tokens = turns.map((turn) => {
+      const { token, after } = turnToToken(state, turn);
+      state = after;
+      return token;
+    });
+    // HistoryPane's exact reconstruction: tokens joined by spaces, no
+    // headers, no round numbers, no P1:–P4: labels.
+    const parsed = parseGame(`${tokens.join(" ")}\n`);
+    expect(parsed.turns.length).toBe(turns.length);
+    expect(parsed.finalState).toEqual(state);
+  });
+
+  it("legacy headers map onto the spec fields (North→Player1, NS→13, ResultReason→Termination)", () => {
+    const turns = randomTurns(23, 8);
+    let state = initialState();
+    const parts: string[] = [];
+    turns.forEach((turn, i) => {
+      if (i % 4 === 0) parts.push(`${Math.floor(i / 4) + 1}.`);
+      const { token, after } = turnToToken(state, turn);
+      parts.push(token);
+      state = after;
+    });
+    const legacy = [
+      '[Event "Legacy dialect"]',
+      '[Site "engine-generated"]',
+      '[Variant "Roto Chess v3.1"]',
+      '[North "Cashin"]',
+      '[West "Andrew"]',
+      '[Result "NS"]',
+      '[ResultReason "checkmate"]',
+      "",
+      parts.join(" "),
+      "",
+    ].join("\n");
+    const parsed = parseGame(legacy);
+    expect(parsed.headers.player1).toBe("Cashin");
+    expect(parsed.headers.player4).toBe("Andrew");
+    expect(parsed.headers.result).toBe("13");
+    expect(parsed.headers.termination).toBe("checkmate");
+    expect(parsed.turns.length).toBe(turns.length);
+    // Legacy "EW" and "draw" results normalize too:
+    const ew = parseGame(legacy.replace('[Result "NS"]', '[Result "EW"]'));
+    expect(ew.headers.result).toBe("24");
+    const draw = parseGame(legacy.replace('[Result "NS"]', '[Result "draw"]'));
+    expect(draw.headers.result).toBe("Draw");
+  });
+});
+
+describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
+  it("pawn moves drop the P; a unique reacher drops the from-square", () => {
+    const state = buildState({
+      pieces: [{ at: "2B", kind: "P", seat: 1 }],
+      activeSeat: 1,
+    });
+    expect(moveToToken(state, mv(state, "2B", "3B"))).toBe("P2B-3B");
+    expect(moveToDisplay(state, mv(state, "2B", "3B"))).toBe("3B");
+  });
+
+  it("pawn captures keep the x", () => {
+    const state = buildState({
+      pieces: [
+        { at: "2B", kind: "P", seat: 1 },
+        { at: "3C", kind: "P", seat: 2 },
+      ],
+      activeSeat: 1,
+    });
+    expect(moveToDisplay(state, mv(state, "2B", "3C"))).toBe("x3C");
+  });
+
+  it("a non-pawn with a unique reacher keeps its letter, drops the from-square", () => {
+    const state = buildState({
+      pieces: [{ at: "2B", kind: "N", seat: 1 }],
+      activeSeat: 1,
+    });
+    expect(moveToDisplay(state, mv(state, "2B", "4C"))).toBe("N4C");
+  });
+
+  it("ambiguity retains the from-square (which then names the piece — letter drops)", () => {
+    const state = buildState({
+      pieces: [
+        { at: "5B", kind: "R", seat: 1 },
+        { at: "9B", kind: "R", seat: 1 },
+      ],
+      activeSeat: 1,
+    });
+    // Both rooks can legally reach 7B — the from-square must stay.
+    expect(moveToDisplay(state, mv(state, "5B", "7B"))).toBe("5B-7B");
+    // (The 9B rook passes display rank 8 — an opposing back rank — so its
+    // §6.2 halo mark rides along even on the abbreviated form.)
+    expect(moveToDisplay(state, mv(state, "9B", "7B"))).toBe("9B-7B*");
+  });
+
+  it("suffix annotations survive abbreviation", () => {
+    const halo = buildState({
+      pieces: [
+        { at: "5B", kind: "R", seat: 1 },
+        { at: "5C", kind: "P", seat: 2 },
+      ],
+      activeSeat: 1,
+    });
+    expect(moveToDisplay(halo, mv(halo, "5B", "5C"))).toBe("Rx5C*");
+    const evap = buildState({
+      pieces: [
+        { at: "2B", kind: "N", seat: 1 },
+        { at: "32C", kind: "P", seat: 2, hasMoved: true, origin: "10C" },
+      ],
+      activeSeat: 1,
+    });
+    expect(moveToDisplay(evap, mv(evap, "2B", "32C"))).toBe("Nx32C*†");
+  });
+
+  it("turnToDisplay pairs opening submoves with a spaced & and carries the canonical form", () => {
+    const state = initialState();
+    const first = legalMoves(state)[0] as Move;
+    const second = legalSecondSubmoves(state, first)[0] as Move;
+    const turn: Turn = { submoves: [first, second] as const };
+    const { display, canonical, after } = turnToDisplay(state, turn);
+    expect(display).toContain(" & ");
+    expect(canonical).toContain("&");
+    expect(canonical).toBe(turnToToken(state, turn).token);
+    expect(after.ply).toBe(1);
+  });
+});
+
+describe("validateGameText (archive-grade structured validation)", () => {
+  it("a clean game yields zero issues", () => {
+    const turns = randomTurns(3, 24);
+    const v = validateGameText(serializeGame({ turns }));
+    expect(v.issues).toEqual([]);
+    expect(v.turns.length).toBe(turns.length);
+  });
+
+  it("an illegal move reports ply, token, and legal alternatives", () => {
+    const turns = randomTurns(13, 24);
+    const text = serializeGame({ turns });
+    const corrupted = text.replace(/([KQRBN])(\d{1,2})B-/u, "$1$2C-");
+    expect(corrupted).not.toBe(text);
+    const v = validateGameText(corrupted);
+    expect(v.issues.length).toBe(1);
+    const issue = v.issues[0];
+    expect(issue?.kind).toBe("illegal-move");
+    expect(issue?.ply).toBeGreaterThan(0);
+    expect(issue?.token).toBeTruthy();
+    expect(issue?.legalAlternatives?.length).toBeGreaterThan(0);
+    // Replay stopped there — the turns before the failure are kept.
+    expect(v.turns.length).toBe((issue?.ply ?? 1) - 1);
+  });
+
+  it("garbage tokens report as parse issues", () => {
+    const turns = randomTurns(9, 24);
+    const text = serializeGame({ turns });
+    const v = validateGameText(`${text}ZZZ\n`);
+    expect(v.issues.some((i) => i.kind === "parse")).toBe(true);
   });
 });
 

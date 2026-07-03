@@ -2,15 +2,17 @@
 
 /**
  * NotationList — round-grouped history, one row per round, four cells in
- * seat colors, special marks inline (* † ^ per Roto-PGN). Tap a turn to
- * jump the replay there (wired by the parent).
+ * seat colors, special marks inline (* † ^ per Roto-PGN). Moves render in
+ * the abbreviated DISPLAY form (spec §3.1); the canonical long form rides
+ * on the title tooltip. Tap a turn to jump the replay there (wired by the
+ * parent).
  */
 
 import { useMemo } from "react";
 import {
   SEAT_COMPASS,
   initialState,
-  turnToToken,
+  turnToDisplay,
   type Seat,
   type Turn,
 } from "@rotochess/engine";
@@ -32,10 +34,10 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
   const tokens = useMemo(() => {
     let state = initialState();
     return turns.map((turn) => {
-      const { token, after } = turnToToken(state, turn);
+      const { display, canonical, after } = turnToDisplay(state, turn);
       const seat = state.activeSeat;
       state = after;
-      return { token, seat };
+      return { display, canonical, seat };
     });
   }, [turns]);
 
@@ -66,12 +68,13 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
             const ply = r * 4 + i + 1;
             // Compass letter is a VISIBLE prefix — seat identity is never
             // carried by color alone.
-            const text = `${SEAT_COMPASS[entry.seat]}·${entry.token}`;
+            const text = `${SEAT_COMPASS[entry.seat]}·${entry.display}`;
             return onJump ? (
               <button
                 key={i}
                 type="button"
                 onClick={() => onJump(ply)}
+                title={entry.canonical}
                 className={`${SEAT_TEXT[entry.seat]} ${
                   currentPly === ply ? "underline" : ""
                 } hover:underline`}
@@ -79,7 +82,11 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
                 {text}
               </button>
             ) : (
-              <span key={i} className={SEAT_TEXT[entry.seat]}>
+              <span
+                key={i}
+                title={entry.canonical}
+                className={SEAT_TEXT[entry.seat]}
+              >
                 {text}
               </span>
             );

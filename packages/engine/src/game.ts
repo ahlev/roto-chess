@@ -93,12 +93,12 @@ export function resultOf(status: GameStatus): GameResult {
   return null;
 }
 
-/** Result header token for Roto-PGN: NS = seats 1&3, EW = seats 2&4. */
-export function resultHeaderOf(status: GameStatus): "NS" | "EW" | "draw" | "*" {
+/** Result header token per TDD §3.8: 13 = seats 1&3 win, 24 = seats 2&4. */
+export function resultHeaderOf(status: GameStatus): "13" | "24" | "Draw" | "*" {
   if (status.kind === "checkmate") {
-    return teamOf(status.matedSeat) === 1 ? "EW" : "NS";
+    return teamOf(status.matedSeat) === 1 ? "24" : "13";
   }
-  if (status.kind === "stalemate") return "draw";
+  if (status.kind === "stalemate") return "Draw";
   return "*";
 }
 
@@ -118,11 +118,11 @@ export function gameToRotoPgn(
       ? Math.ceil(fold.finalState.ply / 4)
       : undefined);
   if (round !== undefined) derived.resultRound = round;
-  if (fold.finalStatus.kind === "checkmate" && !derived.resultReason) {
-    derived.resultReason = "checkmate";
+  if (fold.finalStatus.kind === "checkmate" && !derived.termination) {
+    derived.termination = "Checkmate";
   }
-  if (fold.finalStatus.kind === "stalemate" && !derived.resultReason) {
-    derived.resultReason = "stalemate";
+  if (fold.finalStatus.kind === "stalemate" && !derived.termination) {
+    derived.termination = "Stalemate";
   }
   return serializeGame({ headers: derived, turns });
 }

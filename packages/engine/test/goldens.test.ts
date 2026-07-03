@@ -9,7 +9,13 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseGame, playGame, positionKey, evaluateStatus } from "../src/index.js";
+import {
+  evaluateStatus,
+  parseGame,
+  playGame,
+  positionKey,
+  validateGameText,
+} from "../src/index.js";
 
 const goldensDir = join(dirname(fileURLToPath(import.meta.url)), "goldens");
 
@@ -50,5 +56,32 @@ describe("golden games", () => {
     const parsed = parseGame(load("golden-2.rpgn"));
     expect(parsed.turns.length).toBe(237);
     expect(evaluateStatus(parsed.finalState).kind).toBe("checkmate");
+  });
+
+  it("the legacy-format fixture (pre-spec emit) still replays identically", () => {
+    // legacy-golden-2.rpgn is the same game as golden-2.rpgn as emitted by
+    // the pre-spec serializer: bare unlabeled tokens, unspaced &, compass
+    // headers, Result "NS", ResultReason. It must load forever.
+    const legacy = parseGame(load("legacy-golden-2.rpgn"));
+    const current = parseGame(load("golden-2.rpgn"));
+    expect(legacy.turns.length).toBe(current.turns.length);
+    expect(positionKey(legacy.finalState)).toBe(
+      positionKey(current.finalState),
+    );
+    expect(legacy.headers.result).toBe("13"); // "NS" normalized
+    expect(legacy.headers.termination).toBe("checkmate"); // ResultReason alias
+  });
+
+  it("validateGameText flags a Result header the replay contradicts", () => {
+    const text = load("golden-2.rpgn");
+    expect(validateGameText(text).issues).toEqual([]);
+    const lied = text.replace(/\[Result "[^"]+"\]/u, '[Result "24"]');
+    expect(lied).not.toBe(text);
+    const issues = validateGameText(lied).issues;
+    expect(issues.length).toBe(1);
+    expect(issues[0]?.kind).toBe("result-mismatch");
+    // parseGame stays permissive about results — only the archive harness
+    // treats a result mismatch as a failure.
+    expect(() => parseGame(lied)).not.toThrow();
   });
 });
