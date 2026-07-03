@@ -68,11 +68,11 @@ export default function JoinPage({
     return (
       <Shell>
         <p className="text-sm text-text-dim">
-          This build runs without a backend.{" "}
+          The club is not seating members here just yet.{" "}
           <Link className="underline" href="/hotseat">
             Play hotseat
           </Link>{" "}
-          instead.
+          on this device instead — four chairs, one phone.
         </p>
       </Shell>
     );

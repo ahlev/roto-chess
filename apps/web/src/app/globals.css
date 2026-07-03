@@ -103,9 +103,16 @@ body {
   accent-color: var(--focus-ring); /* native controls stay on palette */
 }
 
-/* Compendium mode: rules & marketing pages read like paper. */
+/* Compendium mode: rules & marketing pages read like paper. The aged-paper
+   plate (public/plates/texture-paper.webp) shows through a near-opaque paper
+   veil at ~6% — near-invisible grain, never a picture, no contrast impact. */
 .compendium {
-  background: var(--paper);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(rgba(243, 235, 221, 0.94), rgba(243, 235, 221, 0.94)),
+    url("/plates/texture-paper.webp");
+  background-size: auto, 512px 512px;
+  background-repeat: repeat;
   color: var(--ink);
 }
 

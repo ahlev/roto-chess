@@ -126,12 +126,16 @@ export default function RulesPage() {
         </nav>
 
         {/* ---- Already play chess? The seven deltas ---- */}
-        <Section id="deltas" title="Already play chess? Seven differences.">
+        <Section
+          id="deltas"
+          title="Already play chess? Seven differences."
+          plate="chapter-meridians"
+        >
           <ol className="list-decimal space-y-2 pl-6">
             <li>
               The board is a ring: 4 files A(inner)–D(outer), 32 ranks
-              clockwise. Coordinates are rank-first — <Mono>32D</Mono>,{" "}
-              <Mono>1A</Mono>. Rank 32 borders rank 1.
+              clockwise. Coordinates are letter-first — <Mono>D32</Mono>,{" "}
+              <Mono>A1</Mono>. Rank 32 borders rank 1.
             </li>
             <li>
               Four armies, two teams. Partners sit opposite; play runs
@@ -184,7 +188,7 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 2 ---- */}
-        <Section id="2" title="§2 · The board">
+        <Section id="2" title="§2 · The board" plate="chapter-board">
           <p>
             128 squares: four concentric FILES (A innermost through D) crossed
             by thirty-two RANKS numbered 1–32 clockwise. The center is
@@ -207,7 +211,11 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 3 ---- */}
-        <Section id="3" title="§3 · Turns, and the double-move opening">
+        <Section
+          id="3"
+          title="§3 · Turns, and the double-move opening"
+          plate="chapter-movement"
+        >
           <p>
             Play proceeds clockwise, one move per turn — except the first FIVE
             rounds, where each turn is TWO moves, one on each side of your own
@@ -219,7 +227,7 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 4 ---- */}
-        <Section id="4" title="§4 · How the pieces move">
+        <Section id="4" title="§4 · How the pieces move" plate="chapter-curl">
           <p>
             Kings step one square any direction; queens slide along files,
             ranks, or diagonals; rooks slide along files (wrapping the ring)
@@ -261,7 +269,11 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 5 ---- */}
-        <Section id="5" title="§5 · The meridian, the halo, and the Avenger">
+        <Section
+          id="5"
+          title="§5 · The meridian, the halo, and the Avenger"
+          plate="chapter-halos"
+        >
           <p id="5.2">
             The four red lines are meridians; yours runs between your two back
             ranks. Kings and queens cross any meridian freely. Rooks, bishops,
@@ -296,7 +308,11 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 6 ---- */}
-        <Section id="6" title="§6 · Check, and when mate actually lands">
+        <Section
+          id="6"
+          title="§6 · Check, and when mate actually lands"
+          plate="chapter-crown"
+        >
           <p id="6.3">
             You may never leave your own king in check — even certain your
             partner would fix it (§6.1). You owe your partner's king nothing
@@ -311,7 +327,7 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 7 ---- */}
-        <Section id="7" title="§7 · The special rules">
+        <Section id="7" title="§7 · The special rules" plate="chapter-avenger">
           <p id="7.1">
             <strong>En passant (§7.1)</strong> works as in standard chess,
             available on the move immediately following the double step.
@@ -354,14 +370,28 @@ export default function RulesPage() {
 function Section({
   id,
   title,
+  plate,
   children,
 }: {
   id: string;
   title: string;
+  /** Optional engraved chapter plate — decorative, sits above the heading. */
+  plate?: string;
   children: React.ReactNode;
 }) {
   return (
     <section id={id} className="scroll-mt-14 space-y-4 pt-10">
+      {plate && (
+        <img
+          src={`/plates/${plate}.webp`}
+          alt=""
+          aria-hidden="true"
+          width={800}
+          height={597}
+          loading="lazy"
+          className="ml-auto block h-auto max-h-40 w-auto rounded border border-[color:var(--ink-dim)]/30 shadow-sm"
+        />
+      )}
       <h2
         className="text-2xl text-[color:var(--ink)]"
         style={{ fontFamily: "var(--font-instrument-serif)" }}

@@ -5,11 +5,17 @@
  */
 
 export function supabaseUrl(): string | null {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
+  // A half-wired .env.local (placeholders, typos) must degrade to demo
+  // mode, not crash every networked route with an invalid-URL client.
+  if (!url || !url.startsWith("https://")) return null;
+  return url;
 }
 
 export function supabaseAnonKey(): string | null {
-  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null;
+  if (!key || key.includes("PASTE_")) return null;
+  return key;
 }
 
 export function isDemoMode(): boolean {

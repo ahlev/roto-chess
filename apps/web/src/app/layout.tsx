@@ -41,11 +41,15 @@ export const metadata: Metadata = {
     description: BRAND.tagline,
     type: "website",
     siteName: BRAND.name,
+    // Engraved games-table plate; compositing the wordmark over it in code
+    // (opengraph-image.tsx) is a later polish.
+    images: [{ url: "/plates/og-backdrop.webp", width: 1376, height: 768 }],
   },
   twitter: {
     card: "summary_large_image",
     title: BRAND.name,
     description: BRAND.tagline,
+    images: ["/plates/og-backdrop.webp"],
   },
 };
 

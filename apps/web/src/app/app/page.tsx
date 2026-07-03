@@ -131,11 +131,11 @@ export default function DashboardPage() {
     return (
       <Shell>
         <p className="text-center text-sm text-text-dim">
-          This build runs without a backend.{" "}
+          The club is not seating members here just yet.{" "}
           <Link className="underline" href="/hotseat">
             Play hotseat
           </Link>{" "}
-          instead.
+          on this device instead — four chairs, one phone.
         </p>
       </Shell>
     );
@@ -161,6 +161,15 @@ export default function DashboardPage() {
         <p className="text-sm text-text-dim">Reading the ledger…</p>
       ) : rows.length === 0 ? (
         <div className="rounded-lg border border-line bg-surface p-6 text-center">
+          <img
+            src="/plates/empty-archive.webp"
+            alt=""
+            aria-hidden="true"
+            width={800}
+            height={800}
+            loading="lazy"
+            className="mx-auto mb-4 w-40 rounded-md border border-line"
+          />
           <p className="text-text">The board is set. The seats are not.</p>
           <Link
             href="/app/new"

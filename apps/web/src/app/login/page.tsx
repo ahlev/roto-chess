@@ -104,12 +104,22 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-6">
-      <h1
-        className="text-4xl text-text"
-        style={{ fontFamily: "var(--font-instrument-serif)" }}
-      >
-        {BRAND.name}
-      </h1>
+      <div className="flex flex-col items-center gap-6">
+        <img
+          src="/plates/empty-waiting.webp"
+          alt=""
+          aria-hidden="true"
+          width={800}
+          height={800}
+          className="w-36 rounded-lg border border-line"
+        />
+        <h1
+          className="text-4xl text-text"
+          style={{ fontFamily: "var(--font-instrument-serif)" }}
+        >
+          {BRAND.name}
+        </h1>
+      </div>
       <Suspense>
         <LoginForm />
       </Suspense>

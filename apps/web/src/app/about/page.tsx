@@ -53,6 +53,16 @@ export default function AboutPage() {
             sit at together.
           </p>
 
+          <img
+            src="/plates/story-decade.webp"
+            alt=""
+            aria-hidden="true"
+            width={800}
+            height={537}
+            loading="lazy"
+            className="h-auto w-full rounded-lg border border-[color:var(--ink-dim)]/30"
+          />
+
           <p className="leading-relaxed">
             The board began as a drawing: a chessboard bent into a ring, four
             armies at the compass points, partners across the table. The rules
@@ -84,6 +94,16 @@ export default function AboutPage() {
             book is silent, the app asks the table rather than deciding for
             it.
           </p>
+
+          <img
+            src="/plates/story-scoresheets.webp"
+            alt=""
+            aria-hidden="true"
+            width={800}
+            height={537}
+            loading="lazy"
+            className="h-auto w-full rounded-lg border border-[color:var(--ink-dim)]/30"
+          />
 
           <p className="leading-relaxed">
             The archive of the original games — some 250 of them — still

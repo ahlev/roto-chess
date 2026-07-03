@@ -60,7 +60,7 @@ export default function SettingsPage() {
     return (
       <Shell>
         <p className="text-sm text-text-dim">
-          This build runs without a backend — nothing to set.
+          The club is not seating members here just yet — nothing to set.
         </p>
       </Shell>
     );
