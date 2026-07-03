@@ -1,0 +1,22 @@
+{
+  "name": "rotochess",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Roto Chess — four-player circular chess. Monorepo: rules engine + web app.",
+  "scripts": {
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.35.0"
+  },
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  }
+}

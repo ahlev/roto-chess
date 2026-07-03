@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      # The service-role key must never reach a client bundle.
+      - name: Guard against service-role key leakage
+        run: |
+          if grep -rn "NEXT_PUBLIC_[A-Z_]*SERVICE_ROLE" \
+               --include="*.ts" --include="*.tsx" \
+               --exclude-dir={node_modules,.next,dist,coverage} .; then
+            echo "::error::service-role key found under a NEXT_PUBLIC_ variable"
+            exit 1
+          fi
+      # The engine's zero-runtime-dependency guarantee, enforced.
+      - name: Guard engine zero-dependency invariant
+        run: |
+          if node -e "const p=require('./packages/engine/package.json'); process.exit(p.dependencies && Object.keys(p.dependencies).length ? 1 : 0)"; then
+            echo "engine has zero runtime deps"
+          else
+            echo "::error::packages/engine acquired runtime dependencies"
+            exit 1
+          fi
