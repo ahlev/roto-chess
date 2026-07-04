@@ -85,6 +85,11 @@ const PIECE_SIZE = 34;
 // --- Zoom viewport tuning -------------------------------------------------
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4.5;
+/** The +/- preset: frame the viewer's own quadrant, which always sits at
+ *  6 o'clock (the board rotates so `orientation`'s meridian is at bottom).
+ *  Focus low and centered; the scale shows board center → bottom rim. */
+const QUADRANT_ZOOM = 2.2;
+const QUADRANT_FOCUS_Y = 0.72;
 /** Pointer travel (client px) under this is a tap; over it, a drag/pan. */
 const TAP_SLOP_PX = 8;
 /** Two touch taps within this window + slop toggle zoom instead of selecting. */
@@ -299,6 +304,25 @@ export function RotoBoard({
 
   const resetZoom = useCallback(() => applyZoom(1, 0, 0), [applyZoom]);
 
+  // Preset: frame the viewer's own quadrant (6 o'clock). Centers the low,
+  // horizontally-centered focus point; applyZoom's pan-clamp keeps the board
+  // covering the viewport, so this never reveals empty space.
+  const zoomToOwnQuadrant = useCallback(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const rect = vp.getBoundingClientRect();
+    const s = QUADRANT_ZOOM;
+    const px = 0.5 * rect.width;
+    const py = QUADRANT_FOCUS_Y * rect.height;
+    applyZoom(s, rect.width / 2 - px * s, rect.height / 2 - py * s);
+  }, [applyZoom]);
+
+  // The +/- toggle: out to the full board if zoomed, in to your quadrant if not.
+  const togglePreset = useCallback(() => {
+    if (zoomRef.current.scale > 1.001) resetZoom();
+    else zoomToOwnQuadrant();
+  }, [resetZoom, zoomToOwnQuadrant]);
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -418,21 +442,25 @@ export function RotoBoard({
     [applyZoom, resetZoom, tapAtPoint],
   );
 
-  // Desktop nice-to-have: ctrl+wheel zooms around the cursor. Native
-  // listener because React's onWheel is passive — preventDefault must win
-  // over the browser's page zoom.
+  // Desktop: the wheel zooms the board around the cursor, in and out to 100%.
+  // ctrl+wheel always zooms; plain wheel zooms too, EXCEPT a zoom-out gesture
+  // already at 100% is left un-prevented so it scrolls the page — the board
+  // never traps the wheel. Native listener because React's onWheel is passive
+  // and preventDefault must win over the browser's page zoom.
   useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return; // plain wheel keeps scrolling the page
+      const { scale, tx, ty } = zoomRef.current;
+      const zoomingOut = e.deltaY > 0;
+      if (!e.ctrlKey && scale <= 1.001 && zoomingOut) return; // release to page
       e.preventDefault();
       const rect = vp.getBoundingClientRect();
-      const { scale, tx, ty } = zoomRef.current;
       const next = Math.min(
         MAX_ZOOM,
         Math.max(MIN_ZOOM, scale * Math.exp(-e.deltaY * 0.002)),
       );
+      if (Math.abs(next - scale) < 1e-4) return;
       const ratio = next / scale;
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
@@ -1082,35 +1110,39 @@ export function RotoBoard({
       </svg>
         </div>
       </div>
-      {/* Floating zoom reset — rendered (and tabbable) only while zoomed,
-          so keyboard flow is untouched at 1×. */}
-      {isZoomed && (
-        <button
-          type="button"
-          className="board-zoom-reset"
-          aria-label="Reset board zoom"
-          title="Reset zoom"
-          onClick={resetZoom}
-        >
-          <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden="true">
-            <circle
-              cx="12"
-              cy="12"
-              r="6.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            />
-            <circle cx="12" cy="12" r="1.7" fill="currentColor" />
-            <path
-              d="M12 1.5v4.2M12 18.3v4.2M1.5 12h4.2M18.3 12h4.2"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-      )}
+      {/* Zoom preset toggle (bottom-right): a magnifier that shows + at the
+          full board (tap to frame your own quadrant) and − while zoomed (tap
+          to restore the full board). Persistent, so it's a one-tap zoom in/out
+          on mobile; also the escape hatch after a pinch/wheel zoom. */}
+      <button
+        type="button"
+        className="board-zoom-reset"
+        aria-label={isZoomed ? "Zoom out to the full board" : "Zoom in to your quadrant"}
+        title={isZoomed ? "Full board" : "Your quadrant"}
+        onClick={togglePreset}
+      >
+        <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden="true">
+          <circle
+            cx="11"
+            cy="11"
+            r="6.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <path
+            d="M15.5 15.5 L21 21"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          {/* − always; the vertical stroke makes it + when not yet zoomed. */}
+          <path d="M8 11h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          {!isZoomed && (
+            <path d="M11 8v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          )}
+        </svg>
+      </button>
       {/* Screen-reader narration: cursor position, selection results, moves. */}
       <div aria-live="polite" role="status" style={VISUALLY_HIDDEN}>
         {announcement}

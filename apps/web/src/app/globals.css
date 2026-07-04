@@ -315,8 +315,9 @@ body {
   will-change: transform;
 }
 
-/* Floating zoom reset — bottom-right of the board, rendered only while
-   zoomed. 44px hit target; palette-native ghost button. */
+/* Zoom preset toggle — persistent, bottom-right of the board. Frames the
+   viewer's quadrant (+) or restores the full board (−). 44px hit target;
+   palette-native ghost button. */
 .board-zoom-reset {
   position: absolute;
   right: 10px;
