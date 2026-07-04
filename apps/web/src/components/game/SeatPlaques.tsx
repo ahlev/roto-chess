@@ -54,37 +54,57 @@ export function SeatPlaques({
   const bySeat = (seat: Seat) => seats.find((s) => s.seat === seat);
 
   // Partners as pairs: 1+3 (North/South) vs 2+4 (East/West). Each pair
-  // shares one subtle rail so the teams group visually.
-  const pairs: Array<readonly [Seat, Seat]> = [
-    [1, 3],
-    [2, 4],
+  // shares one labeled rail so the teams read at a glance.
+  const pairs: Array<{ seats: readonly [Seat, Seat]; label: string }> = [
+    { seats: [1, 3], label: "Red & Blue" },
+    { seats: [2, 4], label: "Black & Gold" },
   ];
 
   return (
     <div className="grid grid-cols-2 gap-2" data-testid="seat-plaques">
-      {pairs.map(([a, b]) => (
-        <div
-          key={a}
-          className="grid grid-cols-2 gap-1 rounded-xl border border-line/60 bg-surface p-1"
-        >
-          <Plaque
-            seat={a}
-            info={bySeat(a)}
-            mySeat={mySeat}
-            activeSeat={activeSeat}
-            vacantHint={vacantHint}
-            onSeatClick={onSeatClick}
-          />
-          <Plaque
-            seat={b}
-            info={bySeat(b)}
-            mySeat={mySeat}
-            activeSeat={activeSeat}
-            vacantHint={vacantHint}
-            onSeatClick={onSeatClick}
-          />
-        </div>
-      ))}
+      {pairs.map(({ seats: [a, b], label }) => {
+        // The team whose turn it is gets a brighter rail so the whole
+        // partnership — not just one seat — reads as "up now".
+        const teamActive = activeSeat === a || activeSeat === b;
+        return (
+          <div
+            key={a}
+            className={`flex flex-col gap-1 rounded-xl border bg-surface p-1.5 ${
+              teamActive ? "border-line" : "border-line/40"
+            }`}
+          >
+            <span
+              className={`px-1 text-[10px] uppercase tracking-wide ${
+                teamActive ? "font-semibold text-text" : "text-text-dim"
+              }`}
+              style={{ fontFamily: "var(--font-plex-mono)" }}
+            >
+              {label}
+              {teamActive && (
+                <span className="ml-1 font-normal text-text-dim">· to move</span>
+              )}
+            </span>
+            <div className="grid grid-cols-2 gap-1">
+              <Plaque
+                seat={a}
+                info={bySeat(a)}
+                mySeat={mySeat}
+                activeSeat={activeSeat}
+                vacantHint={vacantHint}
+                onSeatClick={onSeatClick}
+              />
+              <Plaque
+                seat={b}
+                info={bySeat(b)}
+                mySeat={mySeat}
+                activeSeat={activeSeat}
+                vacantHint={vacantHint}
+                onSeatClick={onSeatClick}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -108,10 +128,10 @@ function Plaque({
   const clickable = info !== undefined && onSeatClick !== undefined;
 
   const frame = active
-    ? `border-2 ${SEAT_BORDER[seat]} bg-surface-raised`
+    ? `border-2 ${SEAT_BORDER[seat]} bg-surface-raised shadow-sm`
     : info
-      ? "border border-line bg-surface-raised/50"
-      : "border border-dashed border-line/70";
+      ? "border border-line/70 bg-surface-raised/40"
+      : "border border-dashed border-line/60";
 
   const body = (
     <>
@@ -138,18 +158,19 @@ function Plaque({
         className={`block truncate text-xs ${
           info
             ? active
-              ? "font-semibold text-text"
+              ? "font-bold text-text"
               : "text-text"
             : "italic text-text-dim"
         }`}
       >
         {info ? info.displayName : vacantHint}
       </span>
-      {/* Active underline bar — the unmistakable "this seat moves now". */}
+      {/* Active seat-color bar — the unmistakable "this seat moves now".
+          Thicker + full-color on the active plaque; a hairline rest elsewhere. */}
       <span
         aria-hidden
-        className={`mt-1 block h-0.5 rounded-full ${
-          active ? SEAT_CHIP[seat] : "bg-transparent"
+        className={`mt-1 block rounded-full ${
+          active ? `h-1 ${SEAT_CHIP[seat]}` : "h-px bg-line/40"
         }`}
       />
     </>

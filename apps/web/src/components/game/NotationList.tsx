@@ -57,13 +57,18 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
 
   return (
     <ol
-      className="space-y-1 p-2 text-sm"
+      className="space-y-1 p-2 text-[11px] leading-tight sm:text-sm"
       style={{ fontFamily: "var(--font-plex-mono)" }}
       aria-label="Move history"
     >
       {rounds.map((round, r) => (
-        <li key={r} className="flex flex-wrap items-baseline gap-x-3">
-          <span className="w-6 text-right text-text-dim">{r + 1}.</span>
+        <li
+          key={r}
+          className="flex flex-nowrap items-baseline gap-x-1.5 overflow-x-auto sm:flex-wrap sm:gap-x-3"
+        >
+          <span className="w-5 shrink-0 text-right text-text-dim sm:w-6">
+            {r + 1}.
+          </span>
           {round.map((entry, i) => {
             const ply = r * 4 + i + 1;
             // Compass letter is a VISIBLE prefix — seat identity is never
@@ -75,7 +80,7 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
                 type="button"
                 onClick={() => onJump(ply)}
                 title={entry.canonical}
-                className={`${SEAT_TEXT[entry.seat]} ${
+                className={`${SEAT_TEXT[entry.seat]} shrink-0 whitespace-nowrap ${
                   currentPly === ply ? "underline" : ""
                 } hover:underline`}
               >
@@ -85,7 +90,7 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
               <span
                 key={i}
                 title={entry.canonical}
-                className={SEAT_TEXT[entry.seat]}
+                className={`${SEAT_TEXT[entry.seat]} shrink-0 whitespace-nowrap`}
               >
                 {text}
               </span>

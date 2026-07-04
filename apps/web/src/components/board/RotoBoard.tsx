@@ -84,7 +84,7 @@ const PIECE_SIZE = 34;
 
 // --- Zoom viewport tuning -------------------------------------------------
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 3;
+const MAX_ZOOM = 4.5;
 /** Pointer travel (client px) under this is a tap; over it, a drag/pan. */
 const TAP_SLOP_PX = 8;
 /** Two touch taps within this window + slop toggle zoom instead of selecting. */

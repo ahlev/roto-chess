@@ -19,6 +19,15 @@ import { browserClient } from "@/lib/supabase/client";
 import { emitAttention } from "@/components/game/attention";
 import { SEAT_CHIP, type PlaqueSeat } from "@/components/game/SeatPlaques";
 
+/** Sender name colored by seat — the same palette as the plaques, carried
+ * cleanly into the transcript so you know who's talking at a glance. */
+const SEAT_TEXT: Record<Seat, string> = {
+  1: "text-[color:var(--north-red-bright)]",
+  2: "text-[color:var(--east-black-bright)]",
+  3: "text-[color:var(--south-blue-bright)]",
+  4: "text-[color:var(--west-gold-bright)]",
+};
+
 interface ChatRow {
   id: number;
   user_id: string;
@@ -373,7 +382,7 @@ export function ChatPanel({
             ref={listRef}
             onScroll={onListScroll}
             data-testid="chat-message-list"
-            className="flex-1 space-y-2 overflow-y-auto p-3 text-sm"
+            className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden p-3 text-sm"
           >
             {visibleRows.length === 0 && (
               <p className="text-text-dim">
@@ -382,22 +391,34 @@ export function ChatPanel({
                   : "The table is quiet. It won't stay that way."}
               </p>
             )}
-            {visibleRows.map((row) => (
-              <div key={row.id}>
-                <span className="text-text-dim">{row.displayName}</span>{" "}
-                {row.anchor_ply !== null && (
-                  <button
-                    type="button"
-                    onClick={() => onJumpToPly?.(row.anchor_ply as number)}
-                    className="rounded border border-line px-1 text-[10px] text-text-dim hover:bg-surface-raised"
-                    style={{ fontFamily: "var(--font-plex-mono)" }}
+            {visibleRows.map((row) => {
+              const senderSeat =
+                seats.find((s) => s.userId === row.user_id)?.seat ?? null;
+              return (
+                <div key={row.id} className="min-w-0 break-words">
+                  <span
+                    className={`font-semibold ${
+                      senderSeat !== null
+                        ? SEAT_TEXT[senderSeat]
+                        : "text-text-dim"
+                    }`}
                   >
-                    @{row.anchor_ply}
-                  </button>
-                )}{" "}
-                <span className="text-text">{row.body}</span>
-              </div>
-            ))}
+                    {row.displayName}
+                  </span>{" "}
+                  {row.anchor_ply !== null && (
+                    <button
+                      type="button"
+                      onClick={() => onJumpToPly?.(row.anchor_ply as number)}
+                      className="rounded border border-line px-1 text-[10px] text-text-dim hover:bg-surface-raised"
+                      style={{ fontFamily: "var(--font-plex-mono)" }}
+                    >
+                      @{row.anchor_ply}
+                    </button>
+                  )}{" "}
+                  <span className="text-text">{row.body}</span>
+                </div>
+              );
+            })}
           </div>
 
           <form
