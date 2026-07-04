@@ -232,3 +232,42 @@ describe("fallenPieces — evaporation (the meridian claims the mover)", () => {
     });
   });
 });
+
+describe("fallenPieces — staged submove of the in-progress turn", () => {
+  it("records a capture the instant it's staged, before the turn commits", () => {
+    // The board's displayState already reflects the opening's first submove;
+    // the ledger must too. A staged (not-yet-committed) capture is passed as
+    // `pending` and shows immediately, credited to the CURRENT mover at the
+    // CURRENT ply — the turn hasn't passed, so neither has advanced.
+    const state = buildState({
+      pieces: [
+        { at: "5B", kind: "R", seat: 1, halo: true },
+        { at: "8B", kind: "B", seat: 2 },
+      ],
+      activeSeat: 1,
+      ply: 20,
+    });
+    const staged = findMove(state, "5B", "8B", { rotDir: 1 });
+    expect(staged.captures).toBe(parseSquare("8B"));
+
+    // No committed turns yet — the capture lives only in the staged submove.
+    const fallen = fallenPieces([], state, [staged]);
+    expect(fallen).toHaveLength(1);
+    expect(fallen[0]).toMatchObject({
+      kind: "B",
+      ownerSeat: 2,
+      by: 1, // current mover, not the next seat
+      ply: 20, // current ply, not bumped
+    });
+  });
+
+  it("defaults to no pending submoves (committed turns unchanged)", () => {
+    const state = buildState({
+      pieces: [{ at: "5B", kind: "R", seat: 1 }],
+      activeSeat: 1,
+    });
+    const quiet = findMove(state, "5B", "5A");
+    // Third arg omitted — behaves exactly as before the immediacy fix.
+    expect(fallenPieces([turn(quiet)], state)).toEqual([]);
+  });
+});

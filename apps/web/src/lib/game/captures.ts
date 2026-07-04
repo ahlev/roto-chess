@@ -14,6 +14,7 @@ import {
   initialState,
   nextSeat,
   type BoardState,
+  type Move,
   type PieceKind,
   type Seat,
   type Turn,
@@ -38,42 +39,50 @@ export interface FallenPiece {
 export function fallenPieces(
   turns: readonly Turn[],
   initial: BoardState = initialState(),
+  pending: readonly Move[] = [],
 ): FallenPiece[] {
   const fallen: FallenPiece[] = [];
   let state = initial;
   let mover = initial.activeSeat;
   let ply = initial.ply;
-  for (const turn of turns) {
-    for (const move of turn.submoves) {
-      if (move.captures !== undefined) {
-        const victim = state.board[move.captures];
-        if (victim) {
-          fallen.push({
-            kind: victim.kind,
-            ownerSeat: victim.seat,
-            by: mover,
-            ply,
-          });
-        }
+
+  // Record a fallen piece for one submove, then advance the board past it.
+  // `mover`/`ply` are read live from the enclosing fold.
+  const record = (move: Move): void => {
+    if (move.captures !== undefined) {
+      const victim = state.board[move.captures];
+      if (victim) {
+        fallen.push({ kind: victim.kind, ownerSeat: victim.seat, by: mover, ply });
       }
-      if (move.evaporates) {
-        // §6.3: the MOVING piece is the victim; the move completes
-        // (including any capture recorded above), then it evaporates.
-        const doomed = state.board[move.from];
-        if (doomed) {
-          fallen.push({
-            kind: doomed.kind,
-            ownerSeat: doomed.seat,
-            by: "evaporated",
-            ply,
-          });
-        }
-      }
-      state = applySubmove(state, move);
     }
+    if (move.evaporates) {
+      // §6.3: the MOVING piece is the victim; the move completes (including
+      // any capture recorded above), then it evaporates.
+      const doomed = state.board[move.from];
+      if (doomed) {
+        fallen.push({
+          kind: doomed.kind,
+          ownerSeat: doomed.seat,
+          by: "evaporated",
+          ply,
+        });
+      }
+    }
+    state = applySubmove(state, move);
+  };
+
+  for (const turn of turns) {
+    for (const move of turn.submoves) record(move);
     mover = nextSeat(mover);
     ply += 1;
   }
+
+  // Staged/pending submoves of the IN-PROGRESS turn (e.g. the opening's first
+  // move, already applied to the board's displayState): the piece must fall in
+  // the ledger the MOMENT it's taken, not when the whole turn commits. The turn
+  // hasn't passed, so `mover`/`ply` still point at the current, in-progress turn.
+  for (const move of pending) record(move);
+
   return fallen;
 }
 

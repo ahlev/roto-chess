@@ -259,7 +259,7 @@ export default function GameRoomPage({
             onSquareTap={game.tap}
             className="w-full"
           />
-          <CapturesTray turns={replay.turns ?? []} />
+          <CapturesTray turns={replay.turns ?? []} staged={game.stagedFirst} />
         </>
       )}
 

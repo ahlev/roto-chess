@@ -13,6 +13,7 @@
 import { useMemo } from "react";
 import {
   teamOf,
+  type Move,
   type PieceKind,
   type Seat,
   type Turn,
@@ -40,16 +41,24 @@ const SEAT_DOT: Record<Seat, string> = {
   4: "var(--west-gold-bright)",
 };
 
-export function CapturesTray({ turns }: { turns: readonly Turn[] }) {
+export function CapturesTray({
+  turns,
+  staged = null,
+}: {
+  turns: readonly Turn[];
+  /** The in-progress turn's already-placed submove (opening's first move),
+   *  so a piece it took shows in the ledger the instant it falls. */
+  staged?: Move | null;
+}) {
   const fallen = useMemo(() => {
     try {
-      return fallenPieces(turns);
+      return fallenPieces(turns, undefined, staged ? [staged] : []);
     } catch {
       // A record that won't replay is surfaced loudly elsewhere; the
       // ledger simply stays closed.
       return [];
     }
-  }, [turns]);
+  }, [turns, staged]);
 
   if (fallen.length === 0) return null;
 

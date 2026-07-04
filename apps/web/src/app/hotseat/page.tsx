@@ -210,7 +210,7 @@ export default function HotseatPage() {
               game.status.kind === "checkmate" ? game.status.winningTeam : null
             }
           />
-          <CapturesTray turns={game.turns} />
+          <CapturesTray turns={game.turns} staged={game.stagedFirst} />
         </>
       )}
 

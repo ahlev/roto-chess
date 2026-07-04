@@ -667,25 +667,36 @@ export function RotoBoard({
               style={ceremony ? { animationDelay: `${i * 80}ms` } : undefined}
             />
           ))}
-          {/* Active-turn arc: a thin seat-colored arc along the outer rim
-              spanning the active seat's 8-rank home quadrant (meridian ±45°).
-              Keyed by seat → one soft CSS fade-in per turn change, then it
-              holds still; hidden during the checkmate ceremony so it never
-              competes with the gold rim inscription. */}
+          {/* Active-turn slice: a bold filled seat-colored wedge hugging the
+              outer rim across the active seat's 8-rank home quadrant — a clear
+              "whose turn" color slice. Keyed by seat → one soft CSS fade-in per
+              turn change, then holds; hidden during the checkmate ceremony so it
+              never competes with the gold rim inscription. Radii stay inside the
+              viewBox margin (OUTER_R 280, half-viewBox 288). */}
           {ceremonyWinner === null &&
             (() => {
               const seatDeg = (state.activeSeat - 1) * 90;
-              const a = polarPoint(seatDeg - TURN_ARC_HALF_DEG, TURN_ARC_R);
-              const b = polarPoint(seatDeg + TURN_ARC_HALF_DEG, TURN_ARC_R);
+              const half = TURN_ARC_HALF_DEG;
+              const ro = OUTER_R + 7; // outer rim, within the viewBox margin
+              const ri = OUTER_R - 3; // reach just inside the board edge
+              const oa = polarPoint(seatDeg - half, ro);
+              const ob = polarPoint(seatDeg + half, ro);
+              const ia = polarPoint(seatDeg - half, ri);
+              const ib = polarPoint(seatDeg + half, ri);
+              const d =
+                `M ${oa.x.toFixed(2)} ${oa.y.toFixed(2)}` +
+                ` A ${ro} ${ro} 0 0 1 ${ob.x.toFixed(2)} ${ob.y.toFixed(2)}` +
+                ` L ${ib.x.toFixed(2)} ${ib.y.toFixed(2)}` +
+                ` A ${ri} ${ri} 0 0 0 ${ia.x.toFixed(2)} ${ia.y.toFixed(2)} Z`;
               return (
                 <path
                   key={`turn-arc-${state.activeSeat}`}
-                  d={`M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${TURN_ARC_R} ${TURN_ARC_R} 0 0 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`}
-                  fill="none"
+                  d={d}
+                  fill={SEAT_BRIGHT[state.activeSeat]}
                   stroke={SEAT_BRIGHT[state.activeSeat]}
-                  strokeWidth={3.5}
-                  strokeLinecap="round"
-                  opacity={0.85}
+                  strokeWidth={1}
+                  strokeLinejoin="round"
+                  opacity={0.92}
                   className="turn-arc"
                   pointerEvents="none"
                   data-testid="turn-arc"
