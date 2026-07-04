@@ -26,8 +26,11 @@ const CONTENTS = [
 ] as const;
 
 export default function RulesPage() {
+  // Haloed so the file-wrap through the seam is a clean geometry lesson — an
+  // unhaloed North rook would evaporate crossing the 32↔1 seam, which IS its
+  // own meridian (that interaction belongs to §5, not the board section).
   const wrapDemo = useMemo(
-    () => demoState([{ at: "5B", kind: "R", seat: 1, hasMoved: true }]),
+    () => demoState([{ at: "5B", kind: "R", seat: 1, hasMoved: true, halo: true }]),
     [],
   );
   const pawnDemo = useMemo(
@@ -199,7 +202,7 @@ export default function RulesPage() {
           </p>
           <DemoBoard
             state={wrapDemo}
-            caption="§4.6 — tap the rook: file-wise moves wrap straight through the 32↔1 seam."
+            caption="§4.6 — tap the rook, then a square across the 32↔1 seam: file-wise moves slide along the ring and wrap straight through the boundary. (Haloed, so it crosses freely — see §5.)"
             className="mx-auto max-w-sm"
           />
         </Section>
