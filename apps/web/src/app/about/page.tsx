@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { MeridianRose } from "@/components/brand/MeridianRose";
-import { BRAND } from "@/config/brand";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 
 export const metadata: Metadata = {
   title: "The Story",
@@ -17,24 +16,7 @@ export default function AboutPage() {
   return (
     <main className="compendium min-h-screen">
       <div className="mx-auto max-w-2xl px-6 pb-16">
-        <header className="flex items-center justify-between py-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-2xl text-[color:var(--ink)]"
-            style={{ fontFamily: "var(--font-instrument-serif)" }}
-          >
-            <MeridianRose size={28} className="text-[color:var(--ink)]" />
-            {BRAND.name}
-          </Link>
-          <nav className="flex gap-4 text-sm text-[color:var(--ink-dim)]">
-            <Link href="/rules" className="hover:underline">
-              The Book
-            </Link>
-            <Link href="/login" className="hover:underline">
-              Sign in
-            </Link>
-          </nav>
-        </header>
+        <SiteHeader tone="paper" links={[{ href: "/rules", label: "The Book" }]} />
 
         <article
           className="space-y-6 text-[color:var(--ink)]"

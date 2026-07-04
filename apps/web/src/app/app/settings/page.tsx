@@ -5,10 +5,9 @@
  * toggle, vacation flag, sign out, delete account. Quiet, one card.
  */
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { browserClient } from "@/lib/supabase/client";
-import { BRAND } from "@/config/brand";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 
 interface Prefs {
   display_name: string;
@@ -204,18 +203,11 @@ function Toggle({
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-12">
-      <header className="flex items-center justify-between py-4">
-        <Link
-          href="/app"
-          className="text-2xl text-text"
-          style={{ fontFamily: "var(--font-instrument-serif)" }}
-        >
-          {BRAND.name}
-        </Link>
-        <Link href="/app" className="text-xs text-text-dim underline">
-          My games
-        </Link>
-      </header>
+      <SiteHeader
+        home="/app"
+        links={[{ href: "/app", label: "My games" }]}
+        auth={false}
+      />
       <h1 className="pb-4 text-sm uppercase tracking-wide text-text-dim">
         Settings
       </h1>

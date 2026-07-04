@@ -5,11 +5,10 @@
  * annulus, go. Lands in the lobby with the invite front and center.
  */
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SEAT_COMPASS, initialState, type Seat } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
-import { BRAND } from "@/config/brand";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 
 const SEAT_NAME: Record<Seat, string> = {
   1: "North",
@@ -58,15 +57,7 @@ export default function NewTablePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-4">
-      <header className="py-4">
-        <Link
-          href="/app"
-          className="text-2xl text-text"
-          style={{ fontFamily: "var(--font-instrument-serif)" }}
-        >
-          {BRAND.name}
-        </Link>
-      </header>
+      <SiteHeader home="/app" links={[{ href: "/app", label: "My games" }]} />
       <h1 className="pb-4 text-lg text-text">Set the board</h1>
       <label className="pb-1 text-xs text-text-dim" htmlFor="table-name">
         Table name (optional)

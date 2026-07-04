@@ -8,7 +8,7 @@
  */
 import { useMemo } from "react";
 import Link from "next/link";
-import { MeridianRose } from "@/components/brand/MeridianRose";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 import { DemoBoard } from "@/components/board/DemoBoard";
 import { demoState } from "@/lib/game/demo-positions";
 import { BRAND } from "@/config/brand";
@@ -71,27 +71,13 @@ export default function RulesPage() {
   return (
     <main className="compendium min-h-screen">
       <div className="mx-auto max-w-3xl px-6 pb-20">
-        <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-2xl text-[color:var(--ink)]"
-            style={{ fontFamily: "var(--font-instrument-serif)" }}
-          >
-            <MeridianRose size={28} className="text-[color:var(--ink)]" />
-            {BRAND.name}
-          </Link>
-          <nav className="flex gap-4 text-sm text-[color:var(--ink-dim)]">
-            <Link href="/learn" className="hover:underline">
-              Learn the game
-            </Link>
-            <Link href="/about" className="hover:underline">
-              The Story
-            </Link>
-            <Link href="/login" className="hover:underline">
-              Sign in
-            </Link>
-          </nav>
-        </header>
+        <SiteHeader
+          tone="paper"
+          links={[
+            { href: "/learn", label: "Learn the game" },
+            { href: "/about", label: "The Story" },
+          ]}
+        />
 
         <h1
           className="border-b-2 border-[color:var(--rule-red)] pb-3 text-4xl text-[color:var(--ink)]"

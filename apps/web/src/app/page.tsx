@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MeridianRose } from "@/components/brand/MeridianRose";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 import { HeroBoard } from "@/components/board/HeroBoard";
 import { BRAND } from "@/config/brand";
 
@@ -27,26 +28,12 @@ export default function Landing() {
           className="absolute inset-0 bg-gradient-to-b from-[rgba(23,19,14,0.78)] via-[rgba(23,19,14,0.7)] to-[color:var(--bg)]"
         />
         <div className="relative mx-auto max-w-5xl px-6">
-          <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-5">
-            <span
-              className="flex items-center gap-2 text-2xl text-text"
-              style={{ fontFamily: "var(--font-instrument-serif)" }}
-            >
-              <MeridianRose size={30} className="text-text" />
-              {BRAND.name}
-            </span>
-            <nav className="flex items-center gap-4 text-sm text-text-dim">
-              <Link href="/rules" className="hover:underline">
-                The Book
-              </Link>
-              <Link href="/about" className="hover:underline">
-                The Story
-              </Link>
-              <Link href="/login" className="hover:underline">
-                Sign in
-              </Link>
-            </nav>
-          </header>
+          <SiteHeader
+            links={[
+              { href: "/rules", label: "The Book" },
+              { href: "/about", label: "The Story" },
+            ]}
+          />
 
           <section className="grid items-center gap-10 py-8 md:grid-cols-2">
             <div>

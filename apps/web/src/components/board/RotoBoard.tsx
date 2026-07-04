@@ -92,9 +92,7 @@ const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_SLOP_PX = 32;
 
 /** Active-turn rim arc: hugs the outer rail, spans the seat's 8-rank home
- * quadrant (meridian ±45°, inset 2° so neighbours never touch). Outer edge
- * 285 + 3.5/2 = 286.75 < CENTER (288) — inside the viewBox by design. */
-const TURN_ARC_R = OUTER_R + 5;
+ * quadrant (meridian ±45°, inset 2° so neighbours never touch). */
 const TURN_ARC_HALF_DEG = 43;
 
 /** Standard visually-hidden style for the live region (screen readers only). */

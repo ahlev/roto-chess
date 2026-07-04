@@ -16,6 +16,7 @@ import {
   type Turn,
 } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 import { CapturesTray } from "@/components/game/CapturesTray";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { NotationList } from "@/components/game/NotationList";
@@ -336,20 +337,7 @@ export default function GameRoomPage({
 }
 
 function Header() {
-  return (
-    <header className="flex items-center justify-between py-3">
-      <Link
-        href="/app"
-        className="text-xl text-text"
-        style={{ fontFamily: "var(--font-instrument-serif)" }}
-      >
-        {BRAND.name}
-      </Link>
-      <Link href="/app" className="text-xs text-text-dim underline">
-        My games
-      </Link>
-    </header>
-  );
+  return <SiteHeader home="/app" links={[{ href: "/app", label: "My games" }]} />;
 }
 
 /**

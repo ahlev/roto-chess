@@ -8,9 +8,9 @@
  */
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { gameToRotoPgn, partnerOf, type Seat } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 import { CapturesTray } from "@/components/game/CapturesTray";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { CoachNotes } from "@/components/game/CoachNotes";
@@ -97,53 +97,40 @@ export default function HotseatPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col px-3 pb-28">
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3">
-        <div className="flex items-baseline gap-3">
-          <Link
-            href="/"
-            className="text-xl text-text"
-            style={{ fontFamily: "var(--font-instrument-serif)" }}
-          >
-            {BRAND.name}
-          </Link>
-          {/* New tab, so a live game is never lost to a rules question. */}
-          <Link
-            href="/rules"
-            target="_blank"
-            rel="noopener"
-            className="text-xs text-text-dim underline"
-          >
-            The Book
-          </Link>
-          <Link href="/learn" className="text-xs text-text-dim underline">
-            Learn the game
-          </Link>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-text-dim">
-          <label className="flex min-h-11 items-center gap-1">
-            <input
-              type="checkbox"
-              checked={rotateToActive}
-              onChange={(e) => setRotateToActive(e.target.checked)}
-            />
-            rotate to player
-          </label>
-          <button
-            type="button"
-            className="min-h-11 rounded border border-line px-2 py-1"
-            onClick={() => setShowHistory((v) => !v)}
-          >
-            {showHistory ? "Board" : "History"}
-          </button>
-          <button
-            type="button"
-            className="min-h-11 rounded border border-line px-2 py-1"
-            onClick={exportRpgn}
-          >
-            .rpgn
-          </button>
-        </div>
-      </header>
+      {/* The Book opens in a new tab, so a live game is never lost to a rules
+          question. Game controls ride in the header's rightSlot. */}
+      <SiteHeader
+        links={[
+          { href: "/rules", label: "The Book", newTab: true },
+          { href: "/learn", label: "Learn the game" },
+        ]}
+        rightSlot={
+          <div className="flex items-center gap-3 text-xs text-text-dim">
+            <label className="flex min-h-11 items-center gap-1">
+              <input
+                type="checkbox"
+                checked={rotateToActive}
+                onChange={(e) => setRotateToActive(e.target.checked)}
+              />
+              rotate to player
+            </label>
+            <button
+              type="button"
+              className="min-h-11 rounded border border-line px-2 py-1"
+              onClick={() => setShowHistory((v) => !v)}
+            >
+              {showHistory ? "Board" : "History"}
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded border border-line px-2 py-1"
+              onClick={exportRpgn}
+            >
+              .rpgn
+            </button>
+          </div>
+        }
+      />
 
       <p
         data-testid="status-line"

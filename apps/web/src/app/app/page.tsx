@@ -13,6 +13,7 @@ import {
   type Seat,
 } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
 
@@ -220,18 +221,7 @@ export default function DashboardPage() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-4 pb-12">
-      <header className="flex items-center justify-between py-4">
-        <Link
-          href="/"
-          className="text-2xl text-text"
-          style={{ fontFamily: "var(--font-instrument-serif)" }}
-        >
-          {BRAND.name}
-        </Link>
-        <Link href="/app/settings" className="text-xs text-text-dim underline">
-          Settings
-        </Link>
-      </header>
+      <SiteHeader links={[{ href: "/app/settings", label: "Settings" }]} />
       {children}
     </main>
   );

@@ -7,10 +7,9 @@
  */
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { MeridianRose } from "@/components/brand/MeridianRose";
+import { SiteHeader } from "@/components/brand/SiteHeader";
 import { DemoBoard } from "@/components/board/DemoBoard";
 import { demoState } from "@/lib/game/demo-positions";
-import { BRAND } from "@/config/brand";
 
 const BEATS = [
   {
@@ -67,19 +66,7 @@ export default function LearnPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col px-4 pb-12">
-      <header className="flex items-center justify-between py-4">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-xl text-text"
-          style={{ fontFamily: "var(--font-instrument-serif)" }}
-        >
-          <MeridianRose size={24} className="text-text" />
-          {BRAND.name}
-        </Link>
-        <Link href="/hotseat" className="text-xs text-text-dim underline">
-          Skip to the board
-        </Link>
-      </header>
+      <SiteHeader links={[{ href: "/hotseat", label: "Skip to the board" }]} />
 
       <div className="flex items-center gap-1 pb-2" role="group" aria-label="Progress">
         {BEATS.map((b, i) => (
