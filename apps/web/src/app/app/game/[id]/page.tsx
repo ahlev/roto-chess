@@ -488,15 +488,10 @@ function ResultSheet({
     <VictoryOverlay
       context={context}
       tally={
-        tally ? (
-          <p
-            className="text-sm text-text"
-            style={{ fontFamily: "var(--font-plex-mono)" }}
-            data-testid="series-tally"
-          >
-            Red&Blue {tally.ns} — {tally.ew} Black&Gold
-            {tally.draws > 0 ? ` · ${tally.draws} drawn` : ""}
-          </p>
+        // A "series" only exists once the table has replayed — a lone game
+        // is not a scoreboard.
+        tally && tally.ns + tally.ew + tally.draws >= 2 ? (
+          <SeriesTally ns={tally.ns} ew={tally.ew} draws={tally.draws} />
         ) : undefined
       }
       actions={
@@ -546,6 +541,84 @@ function ResultSheet({
         </>
       }
     />
+  );
+}
+
+/**
+ * The rematch scoreboard: how the two partnerships have fared across every
+ * game this table has played. Rendered as a labeled two-team score so the
+ * numbers read as a series, not a single game's result. The leading side is
+ * brightened; draws sit quietly beneath.
+ */
+function SeriesTally({
+  ns,
+  ew,
+  draws,
+}: {
+  ns: number;
+  ew: number;
+  draws: number;
+}) {
+  const TeamScore = ({
+    label,
+    dots,
+    score,
+    leads,
+  }: {
+    label: string;
+    dots: [string, string];
+    score: number;
+    leads: boolean;
+  }) => (
+    <div className="flex flex-col items-center gap-1">
+      <span className="flex items-center gap-1.5 text-[11px] text-text-dim">
+        <span aria-hidden className="flex gap-0.5">
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: dots[0] }}
+          />
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: dots[1] }}
+          />
+        </span>
+        {label}
+      </span>
+      <span
+        className={`text-2xl leading-none ${leads ? "font-semibold text-text" : "text-text-dim"}`}
+        style={{ fontFamily: "var(--font-instrument-serif)" }}
+      >
+        {score}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="text-center" data-testid="series-tally">
+      <p className="text-[10px] uppercase tracking-wide text-text-dim/80">
+        Series at this table
+      </p>
+      <div className="mt-2 flex items-start justify-center gap-5">
+        <TeamScore
+          label="Red & Blue"
+          dots={["var(--north-red-bright)", "var(--south-blue-bright)"]}
+          score={ns}
+          leads={ns > ew}
+        />
+        <span className="pt-5 text-text-dim">–</span>
+        <TeamScore
+          label="Black & Gold"
+          dots={["var(--east-black-bright)", "var(--west-gold-bright)"]}
+          score={ew}
+          leads={ew > ns}
+        />
+      </div>
+      {draws > 0 && (
+        <p className="mt-1.5 text-[11px] text-text-dim">
+          {draws} drawn
+        </p>
+      )}
+    </div>
   );
 }
 
