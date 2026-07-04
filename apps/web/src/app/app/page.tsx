@@ -32,6 +32,8 @@ interface CardRow {
   mySeat: Seat;
   tableName: string;
   result: string | null;
+  /** How it ended (checkmate, resignation, …) — clever context on the card. */
+  resultReason: string | null;
   /** Who set the game up — only they may delete it. */
   createdBy: string | null;
   /** When the game was created (date started). */
@@ -73,7 +75,7 @@ export default function DashboardPage() {
     const { data } = await supabase
       .from("game_players")
       .select(
-        "seat, games!inner(id, status, active_seat, state, last_move_at, result, created_by, created_at, tables(name))",
+        "seat, games!inner(id, status, active_seat, state, last_move_at, result, result_reason, created_by, created_at, tables(name))",
       )
       .eq("user_id", auth.user.id);
     const base = (
@@ -86,6 +88,7 @@ export default function DashboardPage() {
           state: unknown;
           last_move_at: string | null;
           result: string | null;
+          result_reason: string | null;
           created_by: string | null;
           created_at: string | null;
           tables: { name: string } | null;
@@ -100,6 +103,7 @@ export default function DashboardPage() {
       mySeat: r.seat as Seat,
       tableName: r.games.tables?.name ?? "A table",
       result: r.games.result,
+      resultReason: r.games.result_reason,
       createdBy: r.games.created_by,
       startedAt: r.games.created_at,
     }));
@@ -344,6 +348,17 @@ function startedLabel(iso: string | null): string {
   });
 }
 
+/** How a finished game ended, as a short human phrase for the archive card. */
+const REASON_LABEL: Record<string, string> = {
+  checkmate: "checkmate",
+  resignation: "resignation",
+  stalemate: "stalemate",
+  agreement: "by agreement",
+  threefold: "threefold",
+  fifty_move: "fifty-move rule",
+  abandonment: "abandoned",
+};
+
 /** Viewer-relative status copy — never a raw enum like "team_13". */
 function cardStatus(row: CardRow): string {
   if (row.status === "lobby") return "Waiting for seats";
@@ -355,10 +370,14 @@ function cardStatus(row: CardRow): string {
   if (row.status === "dormant") return "Dormant — resumable";
   if (row.status === "abandoned") return "Closed as abandoned";
   if (!row.result) return "Finished";
-  if (row.result === "draw") return "Drawn";
+  const reason = row.resultReason ? REASON_LABEL[row.resultReason] : undefined;
+  const tail = reason ? ` · ${reason}` : "";
+  if (row.result === "draw") return `Drawn${tail}`;
   const myTeam = ((row.mySeat - 1) % 2) + 1;
   const winnerTeam = row.result === "team_13" ? 1 : 2;
-  return myTeam === winnerTeam ? "You took the crown" : "The crown went the other way";
+  const verdict =
+    myTeam === winnerTeam ? "You took the crown" : "The crown went the other way";
+  return `${verdict}${tail}`;
 }
 
 function GameCard({

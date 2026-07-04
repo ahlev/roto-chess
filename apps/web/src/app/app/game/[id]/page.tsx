@@ -13,6 +13,7 @@ import {
   parseGame,
   partnerOf,
   type Seat,
+  type Team,
   type Turn,
 } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
@@ -23,8 +24,10 @@ import { NotationList } from "@/components/game/NotationList";
 import { ChatPanel, type ChatOpenRequest } from "@/components/game/ChatPanel";
 import { EndGameActions } from "@/components/game/EndGameActions";
 import { SeatPlaques } from "@/components/game/SeatPlaques";
+import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { emitAttention } from "@/components/game/attention";
 import { useOnlineGame } from "@/components/game/useOnlineGame";
+import { victoryContext, type VictoryReason } from "@/lib/game/victory";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
 
@@ -99,6 +102,32 @@ export default function GameRoomPage({
       ? `Your move. The table is watching.${step}`
       : `${SEAT_NAME[seat]} is thinking…`;
   }, [game.state, game.gameStatus, game.result, game.mySeat, openingStep]);
+
+  // The winning team, decoded from the shared row's result (null = draw).
+  const winningTeam: Team | null =
+    game.result === "team_13" ? 1 : game.result === "team_24" ? 2 : null;
+
+  // The victory card's context — built from the CANONICAL turn list (so it
+  // names the mating stroke) once the game completes. Recomputed from the
+  // result + reason; refines when the replayed turns arrive.
+  const victory = useMemo(() => {
+    if (game.gameStatus !== "complete") return null;
+    const reason: VictoryReason =
+      game.resultReason === "checkmate"
+        ? "checkmate"
+        : game.resultReason === "resignation"
+          ? "resignation"
+          : game.resultReason === "abandonment"
+            ? "abandoned"
+            : game.resultReason === "stalemate"
+              ? "stalemate"
+              : "draw";
+    return victoryContext({
+      reason,
+      winningTeam,
+      turns: replay.turns ?? [],
+    });
+  }, [game.gameStatus, game.resultReason, winningTeam, replay.turns]);
 
   if (game.loading) {
     return (
@@ -259,6 +288,11 @@ export default function GameRoomPage({
             }
             onSquareTap={game.tap}
             className="w-full"
+            // The crown ceremony (winner rotation, gold rim, losers dim) —
+            // wired here so the online board reacts to a finish, not freezes.
+            ceremonyWinner={
+              game.gameStatus === "complete" ? winningTeam : null
+            }
           />
           {/* Online: the ledger follows the CANONICAL record (replay.turns,
               refetched as turns persist). We deliberately do NOT feed the
@@ -294,10 +328,10 @@ export default function GameRoomPage({
           />
         )}
 
-      {game.gameStatus === "complete" && (
+      {game.gameStatus === "complete" && victory && (
         <ResultSheet
+          context={victory}
           statusLine={statusLine}
-          reason={game.resultReason}
           tableId={game.tableId}
           gameId={game.gameId}
           mySeat={game.mySeat}
@@ -341,18 +375,19 @@ function Header() {
 }
 
 /**
- * Result sheet: the verdict, the running SERIES TALLY across the table's
- * episodes, "Run it back" (same seats or rotated), and .rpgn export.
+ * Result sheet: the crown moment (VictoryOverlay) fed the running SERIES
+ * TALLY across the table's episodes as its `tally` slot, and "Run it back"
+ * (same seats or rotated) + .rpgn export + back as its `actions`.
  */
 function ResultSheet({
+  context,
   statusLine,
-  reason,
   tableId,
   gameId,
   mySeat,
 }: {
+  context: ReturnType<typeof victoryContext>;
   statusLine: string;
-  reason: string | null;
   tableId: string | null;
   gameId: string;
   mySeat: Seat | null;
@@ -450,64 +485,67 @@ function ResultSheet({
   };
 
   return (
-    <div className="mt-4 rounded-lg border border-line bg-surface-raised p-4 text-center">
-      <p
-        className="text-2xl text-text"
-        style={{ fontFamily: "var(--font-instrument-serif)" }}
-        data-testid="result-line"
-      >
-        {statusLine}
-      </p>
-      <p className="mt-1 text-xs text-text-dim">{reason ?? ""}</p>
-      {tally && (
-        <p
-          className="mt-2 text-sm text-text"
-          style={{ fontFamily: "var(--font-plex-mono)" }}
-          data-testid="series-tally"
-        >
-          Red&Blue {tally.ns} — {tally.ew} Black&Gold
-          {tally.draws > 0 ? ` · ${tally.draws} drawn` : ""}
-        </p>
-      )}
-      {note && (
-        <p className="mt-2 text-xs text-[color:var(--danger)]">{note}</p>
-      )}
-      <div className="mt-3 flex flex-wrap justify-center gap-2">
-        {mySeat !== null && (
-          <>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => runItBack(false)}
-              className="rounded-full bg-[color:var(--focus-ring)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)]"
-            >
-              Again. Same seats?
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => runItBack(true)}
-              className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
-            >
-              Rotate seats
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          onClick={exportRpgn}
-          className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
-        >
-          Export .rpgn
-        </button>
-        <Link
-          href="/app"
-          className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
-        >
-          Back to your games
-        </Link>
-      </div>
-    </div>
+    <VictoryOverlay
+      context={context}
+      tally={
+        tally ? (
+          <p
+            className="text-sm text-text"
+            style={{ fontFamily: "var(--font-plex-mono)" }}
+            data-testid="series-tally"
+          >
+            Red&Blue {tally.ns} — {tally.ew} Black&Gold
+            {tally.draws > 0 ? ` · ${tally.draws} drawn` : ""}
+          </p>
+        ) : undefined
+      }
+      actions={
+        <>
+          {/* result-line testid preserved for the online e2e harness. */}
+          <span className="sr-only" data-testid="result-line">
+            {statusLine}
+          </span>
+          {note && (
+            <p className="basis-full text-xs text-[color:var(--danger)]">
+              {note}
+            </p>
+          )}
+          {mySeat !== null && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => runItBack(false)}
+                className="rounded-full bg-[color:var(--focus-ring)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)]"
+              >
+                Again. Same seats?
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => runItBack(true)}
+                className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+              >
+                Rotate seats
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={exportRpgn}
+            className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+          >
+            Export .rpgn
+          </button>
+          <Link
+            href="/app"
+            className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+          >
+            Back to your games
+          </Link>
+        </>
+      }
+    />
   );
 }
 

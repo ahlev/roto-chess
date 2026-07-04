@@ -15,7 +15,9 @@ import { CapturesTray } from "@/components/game/CapturesTray";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { CoachNotes } from "@/components/game/CoachNotes";
 import { NotationList } from "@/components/game/NotationList";
+import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { useHotseatGame } from "@/components/game/useHotseatGame";
+import { victoryContext } from "@/lib/game/victory";
 import { BRAND } from "@/config/brand";
 
 const SEAT_NAME: Record<Seat, string> = {
@@ -80,6 +82,16 @@ export default function HotseatPage() {
     const who = SEAT_NAME[seat];
     return `${who}'s ${piece} has earned its halo — it may now cross ${who}'s meridian freely, forever.`;
   }, [game.lastEvents, game.lastEventsSeat, game.state.board]);
+
+  // The clever context spoken by the victory card — recomputed from the
+  // status + full turn list only once the game is no longer active.
+  const victory = useMemo(() => {
+    if (game.status.kind === "active") return null;
+    const reason = game.status.kind === "checkmate" ? "checkmate" : "stalemate";
+    const winningTeam =
+      game.status.kind === "checkmate" ? game.status.winningTeam : null;
+    return victoryContext({ reason, winningTeam, turns: game.turns });
+  }, [game.status, game.turns]);
 
   const exportRpgn = () => {
     const text = gameToRotoPgn(game.turns, {
@@ -207,32 +219,32 @@ export default function HotseatPage() {
         </div>
       )}
 
-      {game.status.kind !== "active" && (
-        <div className="mt-4 rounded-lg border border-line bg-surface-raised p-4 text-center">
-          <p
-            className="text-2xl text-text"
-            style={{ fontFamily: "var(--font-instrument-serif)" }}
-            data-testid="result-line"
-          >
-            {statusLine}
-          </p>
-          <div className="mt-3 flex justify-center gap-2">
-            <button
-              type="button"
-              onClick={game.reset}
-              className="rounded-lg bg-[color:var(--focus-ring)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)]"
-            >
-              Again. Same seats?
-            </button>
-            <button
-              type="button"
-              onClick={exportRpgn}
-              className="rounded-lg border border-line px-4 py-2 text-sm text-text-dim"
-            >
-              Export .rpgn
-            </button>
-          </div>
-        </div>
+      {victory && (
+        <VictoryOverlay
+          context={victory}
+          actions={
+            <>
+              {/* result-line testid preserved for the e2e harness. */}
+              <span className="sr-only" data-testid="result-line">
+                {statusLine}
+              </span>
+              <button
+                type="button"
+                onClick={game.reset}
+                className="rounded-full bg-[color:var(--focus-ring)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)]"
+              >
+                Again. Same seats?
+              </button>
+              <button
+                type="button"
+                onClick={exportRpgn}
+                className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+              >
+                Export .rpgn
+              </button>
+            </>
+          }
+        />
       )}
 
       {(game.draws.threefold || game.draws.fiftyMove) &&
