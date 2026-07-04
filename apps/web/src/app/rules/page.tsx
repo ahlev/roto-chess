@@ -50,6 +50,15 @@ export default function RulesPage() {
     () => demoState([{ at: "2B", kind: "N", seat: 1, halo: true, hasMoved: true, origin: "1C" }]),
     [],
   );
+  // §5.4 — an UNMOVED knight on its home square (1C), whose team has suffered
+  // a qualifying loss (avengeableLoss), crosses its own meridian PENALTY-FREE.
+  const avengerDemo = useMemo(
+    () =>
+      demoState([{ at: "1C", kind: "N", seat: 1 }], 1, {
+        avengeableLoss: [true, false],
+      }),
+    [],
+  );
   const castleDemo = useMemo(
     () =>
       demoState(
@@ -115,7 +124,6 @@ export default function RulesPage() {
         <Section
           id="deltas"
           title="Already play chess? Seven differences."
-          plate="chapter-meridians"
         >
           <ol className="list-decimal space-y-2 pl-6">
             <li>
@@ -174,7 +182,7 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 2 ---- */}
-        <Section id="2" title="§2 · The board" plate="chapter-board">
+        <Section id="2" title="§2 · The board">
           <p>
             128 squares: four concentric FILES (A innermost through D) crossed
             by thirty-two RANKS numbered 1–32 clockwise. The center is
@@ -200,7 +208,6 @@ export default function RulesPage() {
         <Section
           id="3"
           title="§3 · Turns, and the double-move opening"
-          plate="chapter-movement"
         >
           <p>
             Play proceeds clockwise, one move per turn — except the first FIVE
@@ -213,7 +220,7 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 4 ---- */}
-        <Section id="4" title="§4 · How the pieces move" plate="chapter-curl">
+        <Section id="4" title="§4 · How the pieces move">
           <p>
             Kings step one square any direction; queens slide along files,
             ranks, or diagonals; rooks slide along files (wrapping the ring)
@@ -258,7 +265,6 @@ export default function RulesPage() {
         <Section
           id="5"
           title="§5 · The meridian, the halo, and the Avenger"
-          plate="chapter-halos"
         >
           <p id="5.2">
             The four red lines are meridians; yours runs between your two back
@@ -284,20 +290,24 @@ export default function RulesPage() {
           <div className="grid gap-6 md:grid-cols-2">
             <DemoBoard
               state={evapDemo}
-              caption="§5.3 — tap the unhaloed knight: crossing moves complete, then the piece evaporates."
+              caption="§5.3 — tap the unhaloed knight, then a square across your meridian, and confirm: the move completes, then the piece evaporates."
             />
             <DemoBoard
               state={haloDemo}
               caption="§5.2 — the same knight, haloed: home is open, forever."
             />
           </div>
+          <DemoBoard
+            state={avengerDemo}
+            caption="§5.4 — the Avenger: an unmoved knight, its team just wounded, crosses its own meridian and confirm shows it's penalty-free — it crosses and survives."
+            className="mx-auto max-w-sm"
+          />
         </Section>
 
         {/* ---- 6 ---- */}
         <Section
           id="6"
           title="§6 · Check, and when mate actually lands"
-          plate="chapter-crown"
         >
           <p id="6.3">
             You may never leave your own king in check — even certain your
@@ -313,7 +323,7 @@ export default function RulesPage() {
         </Section>
 
         {/* ---- 7 ---- */}
-        <Section id="7" title="§7 · The special rules" plate="chapter-avenger">
+        <Section id="7" title="§7 · The special rules">
           <p id="7.1">
             <strong>En passant (§7.1)</strong> works as in standard chess,
             available on the move immediately following the double step.
@@ -356,28 +366,14 @@ export default function RulesPage() {
 function Section({
   id,
   title,
-  plate,
   children,
 }: {
   id: string;
   title: string;
-  /** Optional engraved chapter plate — decorative, sits above the heading. */
-  plate?: string;
   children: React.ReactNode;
 }) {
   return (
     <section id={id} className="scroll-mt-14 space-y-4 pt-10">
-      {plate && (
-        <img
-          src={`/plates/${plate}.webp`}
-          alt=""
-          aria-hidden="true"
-          width={800}
-          height={597}
-          loading="lazy"
-          className="ml-auto block h-auto max-h-40 w-auto rounded border border-[color:var(--ink-dim)]/30 shadow-sm"
-        />
-      )}
       <h2
         className="text-2xl text-[color:var(--ink)]"
         style={{ fontFamily: "var(--font-instrument-serif)" }}

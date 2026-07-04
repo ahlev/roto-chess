@@ -33,6 +33,9 @@ export interface ConfirmBarProps {
   onChoose: (m: Move) => void;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Render in-flow (a bordered block) instead of the fixed bottom bar — used
+   *  by the rules-page demos so the SAME bar teaches the real interface. */
+  embedded?: boolean;
 }
 
 export function ConfirmBar({
@@ -43,6 +46,7 @@ export function ConfirmBar({
   onChoose,
   onConfirm,
   onCancel,
+  embedded = false,
 }: ConfirmBarProps) {
   const confirmRef = useRef<HTMLButtonElement | null>(null);
 
@@ -65,18 +69,27 @@ export function ConfirmBar({
   const token = moveToToken(state, choice);
   const seat = state.activeSeat;
 
+  const tone = warning
+    ? "border-[color:var(--danger)] bg-[color:var(--warning-surface)]"
+    : "border-line bg-surface-raised";
+  const shell = embedded
+    ? `relative mt-3 rounded-lg border px-4 py-3 ${tone}`
+    : `fixed inset-x-0 bottom-0 z-40 border-t px-4 py-3 ${tone}`;
+
   return (
     <div
-      className={`fixed inset-x-0 bottom-0 z-40 border-t px-4 py-3 ${
-        warning
-          ? "border-[color:var(--danger)] bg-[color:var(--warning-surface)]"
-          : "border-line bg-surface-raised"
-      }`}
+      className={shell}
       role="dialog"
       aria-modal="false"
       aria-label={`Confirm move for ${SEAT_COMPASS[seat]}`}
     >
-      <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
+      <div
+        className={
+          embedded
+            ? "flex flex-col gap-2"
+            : "mx-auto flex max-w-xl items-center justify-between gap-3"
+        }
+      >
         <div className="min-w-0">
           <div
             className="truncate text-lg text-text"
@@ -141,7 +154,7 @@ export function ConfirmBar({
             </div>
           )}
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className={`flex shrink-0 gap-2 ${embedded ? "justify-end" : ""}`}>
           <button
             type="button"
             onClick={onCancel}
