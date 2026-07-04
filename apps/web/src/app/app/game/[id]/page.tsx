@@ -259,7 +259,13 @@ export default function GameRoomPage({
             onSquareTap={game.tap}
             className="w-full"
           />
-          <CapturesTray turns={replay.turns ?? []} staged={game.stagedFirst} />
+          {/* Online: the ledger follows the CANONICAL record (replay.turns,
+              refetched as turns persist). We deliberately do NOT feed the
+              local optimistic stagedFirst here — it's computed against
+              game.state, not this DB-replayed fold, so composing them can
+              blank or mis-credit a capture. Immediacy lives in hotseat, where
+              turns and stagedFirst share one coherent hook. */}
+          <CapturesTray turns={replay.turns ?? []} />
         </>
       )}
 

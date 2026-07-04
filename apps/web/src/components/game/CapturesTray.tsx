@@ -51,12 +51,25 @@ export function CapturesTray({
   staged?: Move | null;
 }) {
   const fallen = useMemo(() => {
+    // The committed turns are canonical — a piece recorded here has truly
+    // fallen and must stay on the ledger.
+    let committed: FallenPiece[];
     try {
-      return fallenPieces(turns, undefined, staged ? [staged] : []);
+      committed = fallenPieces(turns);
     } catch {
-      // A record that won't replay is surfaced loudly elsewhere; the
-      // ledger simply stays closed.
+      // A committed record that won't replay is surfaced loudly elsewhere;
+      // the ledger stays closed rather than show a half-truth.
       return [];
+    }
+    if (!staged) return committed;
+    // The in-progress submove is best-effort. If it doesn't cohere with the
+    // committed turns (the two can momentarily disagree while state settles),
+    // keep the committed ledger — never blank a genuinely fallen piece for a
+    // transient staged inconsistency.
+    try {
+      return fallenPieces(turns, undefined, [staged]);
+    } catch {
+      return committed;
     }
   }, [turns, staged]);
 
