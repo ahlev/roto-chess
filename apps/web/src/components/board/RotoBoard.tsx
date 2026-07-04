@@ -412,11 +412,12 @@ export function RotoBoard({
       g.pinch = null;
       g.multi = false;
       if (e.type === "pointercancel" || wasPinch || g.moved) return;
-      // A tap. A quick second TOUCH tap nearby toggles zoom instead of
-      // selecting (mouse users have ctrl+wheel and the reset button).
+      // A tap/click. A quick second one nearby toggles zoom instead of
+      // selecting — double-tap on touch, double-click on desktop, same
+      // gesture. The first tap still selects; the second zooms.
       const now = e.timeStamp;
       const isDoubleTap =
-        e.pointerType === "touch" &&
+        (e.pointerType === "touch" || e.pointerType === "mouse") &&
         now - g.lastTapTime < DOUBLE_TAP_MS &&
         Math.hypot(e.clientX - g.lastTapX, e.clientY - g.lastTapY) <
           DOUBLE_TAP_SLOP_PX;
