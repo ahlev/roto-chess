@@ -930,16 +930,6 @@ export function RotoBoard({
                     width={PIECE_SIZE}
                     height={PIECE_SIZE}
                   />
-                  {piece.seat === 3 && (
-                    <circle
-                      cx={g.cx}
-                      cy={g.cy + PIECE_SIZE / 2 - 4}
-                      r={3}
-                      fill="var(--piece-cream-detail)"
-                      stroke="var(--piece-outline)"
-                      strokeWidth={0.6}
-                    />
-                  )}
                 </g>
               </g>
             );
