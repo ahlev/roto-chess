@@ -17,6 +17,12 @@ import { SiteHeader } from "@/components/brand/SiteHeader";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
 
+interface Participant {
+  seat: Seat;
+  name: string;
+  userId: string;
+}
+
 interface CardRow {
   id: string;
   status: string;
@@ -28,6 +34,24 @@ interface CardRow {
   result: string | null;
   /** Who set the game up — only they may delete it. */
   createdBy: string | null;
+  /** When the game was created (date started). */
+  startedAt: string | null;
+  /** Everyone seated, by seat — names resolved from profiles. */
+  participants: Participant[];
+  /** The owner's display name, resolved from the participants set. */
+  ownerName: string | null;
+}
+
+/** display_name → username → a seat label; profiles embed is to-one. */
+function profileName(
+  profiles: unknown,
+  seat: number,
+): string {
+  const p = (Array.isArray(profiles) ? profiles[0] : profiles) as
+    | { display_name?: string | null; username?: string | null }
+    | null
+    | undefined;
+  return p?.display_name || p?.username || `Seat ${seat}`;
 }
 
 export default function DashboardPage() {
@@ -49,10 +73,10 @@ export default function DashboardPage() {
     const { data } = await supabase
       .from("game_players")
       .select(
-        "seat, games!inner(id, status, active_seat, state, last_move_at, result, created_by, tables(name))",
+        "seat, games!inner(id, status, active_seat, state, last_move_at, result, created_by, created_at, tables(name))",
       )
       .eq("user_id", auth.user.id);
-    const cards: CardRow[] = (
+    const base = (
       (data ?? []) as unknown as Array<{
         seat: number;
         games: {
@@ -63,6 +87,7 @@ export default function DashboardPage() {
           last_move_at: string | null;
           result: string | null;
           created_by: string | null;
+          created_at: string | null;
           tables: { name: string } | null;
         };
       }>
@@ -76,7 +101,42 @@ export default function DashboardPage() {
       tableName: r.games.tables?.name ?? "A table",
       result: r.games.result,
       createdBy: r.games.created_by,
+      startedAt: r.games.created_at,
     }));
+
+    // Second pass: every seat at every one of my tables, with names. RLS lets
+    // me read co-players' profiles for games I'm in. The owner's name falls
+    // out of this same set (created_by === a seat's user_id).
+    const ids = base.map((c) => c.id);
+    const bySeat = new Map<string, Participant[]>();
+    if (ids.length > 0) {
+      const { data: pdata } = await supabase
+        .from("game_players")
+        .select("game_id, seat, user_id, profiles(display_name, username)")
+        .in("game_id", ids);
+      for (const p of (pdata ?? []) as unknown as Array<{
+        game_id: string;
+        seat: number;
+        user_id: string;
+        profiles: unknown;
+      }>) {
+        const list = bySeat.get(p.game_id) ?? [];
+        list.push({
+          seat: p.seat as Seat,
+          name: profileName(p.profiles, p.seat),
+          userId: p.user_id,
+        });
+        bySeat.set(p.game_id, list);
+      }
+    }
+
+    const cards: CardRow[] = base.map((c) => {
+      const participants = (bySeat.get(c.id) ?? []).sort(
+        (a, b) => a.seat - b.seat,
+      );
+      const owner = participants.find((p) => p.userId === c.createdBy);
+      return { ...c, participants, ownerName: owner?.name ?? null };
+    });
     setRows(cards);
   }, [supabase]);
 
@@ -201,13 +261,13 @@ export default function DashboardPage() {
             onDeleted={load}
           />
           <Section
-            title="Setting up"
+            title="Draft"
             rows={sections.settingUp}
             myUserId={myUserId}
             onDeleted={load}
           />
           <Section
-            title="Finished"
+            title="Completed"
             rows={sections.finished}
             myUserId={myUserId}
             onDeleted={load}
@@ -264,6 +324,26 @@ function Section({
   );
 }
 
+/** Seat → the same bright hue the board and captures tray use. */
+const SEAT_DOT: Record<Seat, string> = {
+  1: "var(--north-red-bright)",
+  2: "var(--east-black-bright)",
+  3: "var(--south-blue-bright)",
+  4: "var(--west-gold-bright)",
+};
+
+/** "Jul 3, 2026" — client-only (cards render after the fetch), so no SSR skew. */
+function startedLabel(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 /** Viewer-relative status copy — never a raw enum like "team_13". */
 function cardStatus(row: CardRow): string {
   if (row.status === "lobby") return "Waiting for seats";
@@ -297,6 +377,8 @@ function GameCard({
       return null;
     }
   }, [row.state]);
+  // ply is the completed-turn count (bumped once per turn, opening included).
+  const turns = state?.ply ?? 0;
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -315,9 +397,30 @@ function GameCard({
             />
           )}
         </div>
-        <div className="min-w-0 pr-6">
+        <div className="min-w-0 flex-1 pr-6">
           <p className="truncate text-sm text-text">{row.tableName}</p>
           <p className="text-xs text-text-dim">{cardStatus(row)}</p>
+          {row.participants.length > 0 && (
+            <ul className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
+              {row.participants.map((p) => (
+                <li
+                  key={p.seat}
+                  className="flex items-center gap-1 text-[11px] text-text-dim"
+                >
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ background: SEAT_DOT[p.seat] }}
+                  />
+                  <span className="max-w-[7rem] truncate">{p.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-1 text-[10px] uppercase tracking-wide text-text-dim/80">
+            {row.ownerName ? <>by {row.ownerName} · </> : null}
+            {startedLabel(row.startedAt)} · {turns} turn{turns === 1 ? "" : "s"}
+          </p>
         </div>
       </Link>
       {canDelete && (
