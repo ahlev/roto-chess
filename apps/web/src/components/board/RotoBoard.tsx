@@ -856,18 +856,45 @@ export function RotoBoard({
                   }
                 >
                   {piece.halo && (
-                    <circle
-                      cx={g.cx}
-                      cy={g.cy}
-                      r={PIECE_SIZE / 2 - 1}
-                      fill="none"
-                      stroke="var(--halo)"
-                      strokeWidth={1.6}
-                      opacity={0.95}
-                      className={
-                        bloomSet.has(g.square) ? "halo-inscribe" : undefined
-                      }
-                    />
+                    <g>
+                      {/* Soft outer bloom so the gold reads off any quadrant. */}
+                      <circle
+                        cx={g.cx}
+                        cy={g.cy}
+                        r={PIECE_SIZE / 2 - 1}
+                        fill="none"
+                        stroke="var(--halo)"
+                        strokeWidth={6.5}
+                        opacity={0.22}
+                      />
+                      {/* Bold solid gold ring — the halo itself. Radius stays
+                          16 (PIECE_SIZE/2 − 1) so the 100.5 dash circumference
+                          still matches the inscribe draw-on when freshly earned. */}
+                      <circle
+                        cx={g.cx}
+                        cy={g.cy}
+                        r={PIECE_SIZE / 2 - 1}
+                        fill="none"
+                        stroke="var(--halo)"
+                        strokeWidth={3.4}
+                        opacity={1}
+                        className={
+                          bloomSet.has(g.square) ? "halo-inscribe" : undefined
+                        }
+                      />
+                      {/* Thin dark casing at the outer edge — keeps the gold
+                          ring distinct even on West's gold pieces, where halo
+                          (#f2d27c) and the piece (#d9ae4e) are near-same hues. */}
+                      <circle
+                        cx={g.cx}
+                        cy={g.cy}
+                        r={PIECE_SIZE / 2 + 0.7}
+                        fill="none"
+                        stroke="var(--piece-outline)"
+                        strokeWidth={0.8}
+                        opacity={0.5}
+                      />
+                    </g>
                   )}
                   <image
                     href={`/pieces/${piece.seat}${piece.kind}.svg`}
