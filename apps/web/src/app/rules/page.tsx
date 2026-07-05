@@ -86,17 +86,27 @@ export default function RulesPage() {
         <SiteHeader
           tone="paper"
           links={[
-            { href: "/learn", label: "Learn the game" },
             { href: "/about", label: "The Story" },
+            { href: "/app", label: "My Games" },
           ]}
         />
 
-        <h1
-          className="border-b-2 border-[color:var(--rule-red)] pb-3 text-4xl text-[color:var(--ink)]"
-          style={{ fontFamily: "var(--font-instrument-serif)" }}
-        >
-          The Book
-        </h1>
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b-2 border-[color:var(--rule-red)] pb-3">
+          <h1
+            className="text-4xl text-[color:var(--ink)]"
+            style={{ fontFamily: "var(--font-instrument-serif)" }}
+          >
+            The Rulebook
+          </h1>
+          {/* The interactive tutorial, promoted from a nav link to a clear
+              call to action next to the title. */}
+          <Link
+            href="/learn"
+            className="shrink-0 rounded-full bg-[color:var(--ink)] px-4 py-2 text-sm font-semibold text-[color:var(--paper)] hover:opacity-90"
+          >
+            Learn the game →
+          </Link>
+        </div>
         <p className="pt-2 text-sm text-[color:var(--ink-dim)]">
           Rulebook {BRAND.rulebookVersion} — the table's ratified rules. Every
           diagram below is live: tap a piece to see its true moves.

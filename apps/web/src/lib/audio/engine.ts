@@ -14,8 +14,8 @@
  */
 import { renderAll, type CueName } from "./synth";
 
-/** The top of the range — moderate on purpose. */
-const MASTER_CEILING = 0.5;
+/** The top of the range — moderate on purpose (present, never loud). */
+const MASTER_CEILING = 0.6;
 
 /** Per-cue perceived-loudness balance (a sustained bell needs less than a click). */
 const CUE_TRIM: Record<CueName, number> = {

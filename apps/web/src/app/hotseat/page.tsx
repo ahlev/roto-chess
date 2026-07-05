@@ -143,7 +143,7 @@ export default function HotseatPage() {
           question. Game controls ride in the header's rightSlot. */}
       <SiteHeader
         links={[
-          { href: "/rules", label: "The Book", newTab: true },
+          { href: "/rules", label: "How To Play", newTab: true },
           { href: "/learn", label: "Learn the game" },
         ]}
         rightSlot={

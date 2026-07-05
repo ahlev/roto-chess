@@ -16,7 +16,13 @@ export default function AboutPage() {
   return (
     <main className="compendium min-h-screen">
       <div className="mx-auto max-w-2xl px-6 pb-16">
-        <SiteHeader tone="paper" links={[{ href: "/rules", label: "The Book" }]} />
+        <SiteHeader
+          tone="paper"
+          links={[
+            { href: "/rules", label: "How To Play" },
+            { href: "/app", label: "My Games" },
+          ]}
+        />
 
         <article
           className="space-y-6 text-[color:var(--ink)]"

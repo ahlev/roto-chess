@@ -7,6 +7,7 @@ import {
 } from "next/font/google";
 import { BRAND } from "@/config/brand";
 import { SoundController } from "@/components/audio/SoundController";
+import { FloatingSoundToggle } from "@/components/audio/FloatingSoundToggle";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -64,6 +65,7 @@ export default function RootLayout({
       >
         {children}
         <SoundController />
+        <FloatingSoundToggle />
       </body>
     </html>
   );

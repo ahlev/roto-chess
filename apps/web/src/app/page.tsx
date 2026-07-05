@@ -30,8 +30,9 @@ export default function Landing() {
         <div className="relative mx-auto max-w-5xl px-6">
           <SiteHeader
             links={[
-              { href: "/rules", label: "The Book" },
+              { href: "/rules", label: "How To Play" },
               { href: "/about", label: "The Story" },
+              { href: "/app", label: "My Games" },
             ]}
           />
 
@@ -59,7 +60,7 @@ export default function Landing() {
                   href="/learn"
                   className="rounded-full border border-line px-6 py-3 text-text-dim"
                 >
-                  How to play
+                  Learn the game
                 </Link>
               </div>
               <p className="mt-4 text-xs text-text-dim">
