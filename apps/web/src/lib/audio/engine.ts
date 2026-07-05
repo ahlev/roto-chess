@@ -9,8 +9,8 @@
  *  - Master ceiling is deliberately low; per-cue trims balance perceived
  *    loudness so a ringing bell never dominates a dry click.
  *  - A tiny debounce prevents the same cue double-firing on rapid events.
- *  - Mute state persists to localStorage and honors prefers-reduced-motion
- *    (the OS "calmer" signal) by starting muted.
+ *  - Sound is ON by default; a persisted mute is the only thing that silences
+ *    it, so it never feels mysteriously broken.
  */
 import { renderAll, type CueName } from "./synth";
 
@@ -40,20 +40,12 @@ let enabled = true;
 const lastPlayed = new Map<CueName, number>();
 const listeners = new Set<(on: boolean) => void>();
 
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
-}
-
 function loadPreference(): boolean {
   if (typeof window === "undefined") return true;
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === "off") return false;
-  if (stored === "on") return true;
-  // No explicit choice yet: default ON, unless the OS asks for calm.
-  return !prefersReducedMotion();
+  // Default ON — only an explicit mute silences it. (An earlier build
+  // defaulted reduced-motion users to muted, which read as "sound is broken";
+  // reduced-motion should calm ambient layers, not kill every cue.)
+  return window.localStorage.getItem(STORAGE_KEY) !== "off";
 }
 
 /** Create the context + render buffers. Safe to call repeatedly. */

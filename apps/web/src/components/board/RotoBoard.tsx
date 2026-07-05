@@ -861,9 +861,9 @@ export function RotoBoard({
                 </g>
               );
             })}
-          {/* Pieces — counter-rotated upright; halo circlets; blue base notch.
-              The settle animation lives on an INNER group so its final
-              transform can never override the counter-rotation attribute. */}
+          {/* Pieces — counter-rotated upright; halo circlets. The settle
+              animation lives on an INNER group so its final transform can
+              never override the counter-rotation attribute. */}
           {SQUARES.map((g) => {
             const piece = state.board[g.square];
             if (!piece) return null;

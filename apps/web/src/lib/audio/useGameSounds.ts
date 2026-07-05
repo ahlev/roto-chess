@@ -14,15 +14,26 @@ import { playCue } from "./engine";
 export function useGameSounds({
   turns,
   checkedNow,
+  staged = false,
   ready = true,
 }: {
   turns: readonly Turn[];
   checkedNow: boolean;
+  /** The opening's first submove is placed but not yet committed. */
+  staged?: boolean;
   ready?: boolean;
 }): void {
   const seen = useRef<number | null>(null);
   const checkedRef = useRef(checkedNow);
   checkedRef.current = checkedNow;
+  const wasStaged = useRef(false);
+
+  // A softer set-down when the opening's first submove is placed, so the very
+  // first tap of a game gives feedback (the full cue waits for the commit).
+  useEffect(() => {
+    if (staged && !wasStaged.current) playCue("set-down", 0.7);
+    wasStaged.current = staged;
+  }, [staged]);
 
   useEffect(() => {
     if (!ready) return;

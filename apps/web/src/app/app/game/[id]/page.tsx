@@ -118,6 +118,7 @@ export default function GameRoomPage({
   useGameSounds({
     turns: replay.turns ?? [],
     checkedNow,
+    staged: game.stagedFirst !== null,
     ready: replay.turns !== null,
   });
 

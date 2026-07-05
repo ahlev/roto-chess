@@ -8,12 +8,13 @@
  */
 
 import { useMemo, useState } from "react";
-import { gameToRotoPgn, partnerOf, type Seat } from "@rotochess/engine";
+import { gameToRotoPgn, partnerOf, SEATS, type Seat } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
 import { SiteHeader } from "@/components/brand/SiteHeader";
 import { CapturesTray } from "@/components/game/CapturesTray";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { CoachNotes } from "@/components/game/CoachNotes";
+import { SeatPlaques, type PlaqueSeat } from "@/components/game/SeatPlaques";
 import { NotationList } from "@/components/game/NotationList";
 import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { useHotseatGame } from "@/components/game/useHotseatGame";
@@ -50,7 +51,28 @@ export default function HotseatPage() {
     turns: game.turns,
     checkedNow:
       game.status.kind === "active" && game.status.inCheck.length > 0,
+    staged: game.stagedFirst !== null,
   });
+
+  // Turn indicator, matched to the online room: the four seats as plaques with
+  // the live seat's partnership lit. Single-player twist — the "you" badge
+  // follows whoever is on the clock (the person holding the device IS them).
+  const activeSeat = game.status.kind === "active" ? game.state.activeSeat : null;
+  const seatPlaques: PlaqueSeat[] = useMemo(
+    () => SEATS.map((s) => ({ seat: s, userId: "", displayName: SEAT_NAME[s] })),
+    [],
+  );
+
+  // §6.3 out loud: a check on a NON-active player is not yet decided.
+  const checkNote = (() => {
+    const s = game.status;
+    if (s.kind !== "active" || s.inCheck.length === 0) return "";
+    const nonActive = s.inCheck.some((c) => c !== game.state.activeSeat);
+    const who = s.inCheck.map((c) => `${SEAT_NAME[c]} King`).join(" and the ");
+    return `Check on the ${who}${
+      nonActive ? " — not checkmate unless it stands on their turn" : ""
+    }.`;
+  })();
 
   const statusLine = useMemo(() => {
     const s = game.status;
@@ -152,12 +174,33 @@ export default function HotseatPage() {
         }
       />
 
+      {/* Turn indicator, matched to the online room. */}
+      <SeatPlaques
+        seats={seatPlaques}
+        mySeat={activeSeat}
+        activeSeat={activeSeat}
+      />
+
       <p
         data-testid="status-line"
         aria-live="polite"
-        className="pb-2 text-center text-sm text-text-dim"
+        className="py-2 text-center text-sm text-text-dim"
       >
-        {statusLine}
+        {activeSeat !== null ? (
+          <>
+            <span className="inline-block rounded-full bg-[color:var(--focus-ring)] px-3 py-0.5 text-sm font-bold text-[color:var(--ink)]">
+              {SEAT_NAME[activeSeat]} to move
+            </span>
+            <span className="ml-2">
+              {openingStep
+                ? `Move ${openingStep} of 2. `
+                : "Pass the device when the turn is done. "}
+              {checkNote}
+            </span>
+          </>
+        ) : (
+          statusLine
+        )}
       </p>
 
       {game.stagedFirst && (
