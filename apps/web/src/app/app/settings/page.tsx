@@ -27,18 +27,21 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!supabase) return;
-    void supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) {
+    // Persisted-session gate (not getUser's network check) so a signed-in
+    // member is never bounced to /login by a transient validation failure.
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const user = data.session?.user;
+      if (!user) {
         router.replace("/login?redirect=/app/settings");
         return;
       }
-      setUserId(data.user.id);
+      setUserId(user.id);
       const { data: row } = await supabase
         .from("profiles")
         .select(
           "display_name, email_notifications, reduced_motion, coach_enabled, vacation_until",
         )
-        .eq("id", data.user.id)
+        .eq("id", user.id)
         .single();
       if (row) setPrefs(row as Prefs);
     });

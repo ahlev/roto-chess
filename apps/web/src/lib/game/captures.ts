@@ -29,6 +29,8 @@ export interface FallenPiece {
   by: Seat | "evaporated";
   /** Ply (completed-turn count) at which it fell. */
   ply: number;
+  /** Whether the piece wore an earned halo (§6.2) when it fell. */
+  haloed: boolean;
 }
 
 /**
@@ -52,7 +54,13 @@ export function fallenPieces(
     if (move.captures !== undefined) {
       const victim = state.board[move.captures];
       if (victim) {
-        fallen.push({ kind: victim.kind, ownerSeat: victim.seat, by: mover, ply });
+        fallen.push({
+          kind: victim.kind,
+          ownerSeat: victim.seat,
+          by: mover,
+          ply,
+          haloed: victim.halo,
+        });
       }
     }
     if (move.evaporates) {
@@ -65,6 +73,7 @@ export function fallenPieces(
           ownerSeat: doomed.seat,
           by: "evaporated",
           ply,
+          haloed: doomed.halo,
         });
       }
     }
@@ -105,7 +114,7 @@ const KIND_NAME: Record<PieceKind, string> = {
 /** The ledger line for one fallen piece — tooltip and accessible name. */
 export function fallenLabel(fallen: FallenPiece): string {
   const owner = SEAT_NAME[fallen.ownerSeat];
-  const piece = KIND_NAME[fallen.kind];
+  const piece = fallen.haloed ? `haloed ${KIND_NAME[fallen.kind]}` : KIND_NAME[fallen.kind];
   return fallen.by === "evaporated"
     ? `${owner}'s ${piece} — evaporated at the meridian`
     : `${owner}'s ${piece} — taken by ${SEAT_NAME[fallen.by]}`;

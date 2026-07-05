@@ -5,16 +5,35 @@
  * ?redirect=/join/CODE so an invite link survives the sign-in round trip.
  * In demo mode the page explains itself instead of erroring.
  */
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
 
 function LoginForm() {
   const params = useSearchParams();
-  const redirect = params.get("redirect") ?? "/app";
+  const router = useRouter();
+  const rawRedirect = params.get("redirect") ?? "/app";
+  // Only ever forward to an internal path (never //evil.com).
+  const redirect =
+    rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+      ? rawRedirect
+      : "/app";
   const supabase = browserClient();
+
+  // Already a member? Don't make them sign in again — forward straight through.
+  // This makes any stray redirect to /login seamless rather than a re-login.
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active && data.session?.user) router.replace(redirect);
+    });
+    return () => {
+      active = false;
+    };
+  }, [supabase, router, redirect]);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">(
     "idle",

@@ -32,10 +32,13 @@ export function useAuthStatus(): AuthStatus {
       return;
     }
     let active = true;
-    void supabase.auth.getUser().then(({ data }) => {
+    // getSession reads the persisted session (cookies) without a network
+    // round-trip, so the header reflects "signed in" reliably; onAuthStateChange
+    // below keeps it live.
+    void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
-      setSignedIn(Boolean(data.user));
-      setEmail(data.user?.email ?? null);
+      setSignedIn(Boolean(data.session?.user));
+      setEmail(data.session?.user?.email ?? null);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setSignedIn(Boolean(session?.user));

@@ -193,8 +193,10 @@ export function useOnlineGame(gameId: string): OnlineGame {
       setLoading(false);
       return;
     }
-    void supabase.auth.getUser().then(({ data }) => {
-      setMyUserId(data.user?.id ?? null);
+    // Persisted session (cookies), so the player's identity survives navigation
+    // and focus changes without a flaky network re-validation.
+    void supabase.auth.getSession().then(({ data }) => {
+      setMyUserId(data.session?.user?.id ?? null);
     });
   }, [supabase]);
 

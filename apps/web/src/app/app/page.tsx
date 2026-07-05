@@ -65,19 +65,23 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) {
+    // Gate on the PERSISTED session (read from cookies), not getUser()'s
+    // network re-validation — this effect re-runs on every window focus, and
+    // a flaky getUser() there was bouncing signed-in members to /login.
+    const { data: auth } = await supabase.auth.getSession();
+    const user = auth.session?.user;
+    if (!user) {
       setSignedIn(false);
       return;
     }
     setSignedIn(true);
-    setMyUserId(auth.user.id);
+    setMyUserId(user.id);
     const { data } = await supabase
       .from("game_players")
       .select(
         "seat, games!inner(id, status, active_seat, state, last_move_at, result, result_reason, created_by, created_at, tables(name))",
       )
-      .eq("user_id", auth.user.id);
+      .eq("user_id", user.id);
     const base = (
       (data ?? []) as unknown as Array<{
         seat: number;

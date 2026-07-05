@@ -136,6 +136,18 @@ function FallenGlyph({ fallen }: { fallen: FallenPiece }) {
         className="block h-[22px] w-[22px]"
         draggable={false}
       />
+      {fallen.haloed && (
+        // It fell wearing an earned halo — the reserved gold RING, so the
+        // ledger honors what was taken (form first: a ring, not a hue swap).
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-[-1.5px] rounded-full"
+          style={{
+            boxShadow:
+              "inset 0 0 0 1.5px var(--halo), 0 0 3px 0.5px color-mix(in srgb, var(--halo) 55%, transparent)",
+          }}
+        />
+      )}
       {fallen.by === "evaporated" ? (
         // The meridian's claim: an ash mote — diamond form, never a
         // captor's round dot (form first, hue second).

@@ -36,8 +36,8 @@ export default function JoinPage({
 
   useEffect(() => {
     if (!supabase) return;
-    void supabase.auth.getUser().then(({ data }) => {
-      setSignedIn(Boolean(data.user));
+    void supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(Boolean(data.session?.user));
     });
     // Honest preview (works before auth): table name + truly open seats.
     void supabase

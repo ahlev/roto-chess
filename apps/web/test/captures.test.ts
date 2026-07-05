@@ -142,6 +142,23 @@ describe("fallenPieces — normal captures", () => {
     expect(fallenLabel(fallen[0]!)).toBe("East's bishop — taken by North");
   });
 
+  it("records a captured piece's earned halo, and names it in the label", () => {
+    // The victim bishop wears an earned halo (§6.2) when it falls.
+    const state = buildState({
+      pieces: [
+        { at: "5B", kind: "R", seat: 1, halo: true },
+        { at: "8B", kind: "B", seat: 2, halo: true },
+      ],
+      activeSeat: 1,
+    });
+    const move = findMove(state, "5B", "8B", { rotDir: 1 });
+    const fallen = fallenPieces([turn(move)], state);
+    expect(fallen[0]?.haloed).toBe(true);
+    expect(fallenLabel(fallen[0]!)).toBe(
+      "East's haloed bishop — taken by North",
+    );
+  });
+
   it("empty for a game with no captures", () => {
     const state = buildState({
       pieces: [{ at: "5B", kind: "R", seat: 1 }],
