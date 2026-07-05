@@ -125,6 +125,12 @@ export interface RotoBoardProps {
   pendingMove?: Move | null;
   /** Squares of the last completed turn, tinted until the next move. */
   lastMove?: readonly Square[];
+  /**
+   * Each seat's most recent move (from/to). Their tiles are darkened slightly
+   * as a between-turns cue — "here's what each player last did" — while the
+   * single freshest move (in `lastMove`) keeps its brighter tint on top.
+   */
+  priorMoves?: readonly { seat: Seat; from: Square; to: Square }[];
   interactive?: boolean;
   onSquareTap?: (square: Square) => void;
   className?: string;
@@ -156,6 +162,7 @@ export function RotoBoard({
   legalTargets = [],
   pendingMove = null,
   lastMove = [],
+  priorMoves = [],
   interactive = true,
   onSquareTap,
   className,
@@ -204,6 +211,22 @@ export function RotoBoard({
     return out;
   }, [legalTargets]);
   const lastMoveSet = useMemo(() => new Set(lastMove), [lastMove]);
+
+  // Per-seat "last move" tiles, minus whatever the freshest move already
+  // brightens — so the newest move pops and the other three read as a quieter,
+  // darker memory of the round. One entry per (square, seat) to darken.
+  const priorTiles = useMemo(() => {
+    const seen = new Set<Square>();
+    const out: { square: Square; seat: Seat }[] = [];
+    for (const m of priorMoves) {
+      for (const sq of [m.from, m.to]) {
+        if (lastMoveSet.has(sq) || seen.has(sq)) continue;
+        seen.add(sq);
+        out.push({ square: sq, seat: m.seat });
+      }
+    }
+    return out;
+  }, [priorMoves, lastMoveSet]);
 
   const checkedKings = useMemo(() => {
     const out: Square[] = [];
@@ -669,6 +692,21 @@ export function RotoBoard({
               stroke={SEAT_BRIGHT[state.activeSeat]}
               strokeWidth={2}
             />
+          )}
+          {/* Between-turns memory: each other seat's last move, darkened a
+              touch with a faint seat-colored edge so you can tell whose it is. */}
+          {priorTiles.map(({ square, seat }) =>
+            SQUARES[square] ? (
+              <path
+                key={`prior-${square}`}
+                d={SQUARES[square].path}
+                fill="#000"
+                fillOpacity={0.17}
+                stroke={SEAT_BRIGHT[seat]}
+                strokeOpacity={0.5}
+                strokeWidth={1.2}
+              />
+            ) : null,
           )}
           {[...lastMoveSet].map((sq) =>
             SQUARES[sq] ? (

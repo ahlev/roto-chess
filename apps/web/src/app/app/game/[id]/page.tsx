@@ -29,6 +29,7 @@ import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { emitAttention } from "@/components/game/attention";
 import { useOnlineGame } from "@/components/game/useOnlineGame";
 import { useGameSounds } from "@/lib/audio/useGameSounds";
+import { recentMovesBySeat } from "@/lib/game/recentMoves";
 import { victoryContext, type VictoryReason } from "@/lib/game/victory";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
@@ -121,6 +122,13 @@ export default function GameRoomPage({
     staged: game.stagedFirst !== null,
     ready: replay.turns !== null,
   });
+
+  // Between-turns cue: darken each seat's most recent from/to tiles, from the
+  // canonical turn list so it reflects every player's last move at the table.
+  const priorMoves = useMemo(
+    () => recentMovesBySeat(replay.turns ?? []),
+    [replay.turns],
+  );
 
   // The winning team, decoded from the shared row's result (null = draw).
   const winningTeam: Team | null =
@@ -300,6 +308,7 @@ export default function GameRoomPage({
             legalTargets={game.selectionMoves}
             pendingMove={game.pendingChoice}
             lastMove={game.lastMoveSquares}
+            priorMoves={priorMoves}
             interactive={
               game.gameStatus === "active" &&
               game.mySeat !== null &&

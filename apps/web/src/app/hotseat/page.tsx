@@ -19,6 +19,7 @@ import { NotationList } from "@/components/game/NotationList";
 import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { useHotseatGame } from "@/components/game/useHotseatGame";
 import { useGameSounds } from "@/lib/audio/useGameSounds";
+import { recentMovesBySeat } from "@/lib/game/recentMoves";
 import { victoryContext } from "@/lib/game/victory";
 import { BRAND } from "@/config/brand";
 
@@ -45,6 +46,12 @@ export default function HotseatPage() {
 
   const orientation: Seat = rotateToActive ? game.state.activeSeat : 1;
   const openingStep = game.opening ? (game.stagedFirst ? 2 : 1) : null;
+
+  // Between-turns cue: darken each seat's most recent from/to tiles.
+  const priorMoves = useMemo(
+    () => recentMovesBySeat(game.turns),
+    [game.turns],
+  );
 
   // Move / capture / halo / evaporation / check cues, fired as turns commit.
   useGameSounds({
@@ -250,6 +257,7 @@ export default function HotseatPage() {
             legalTargets={game.selectionMoves}
             pendingMove={game.pendingChoice}
             lastMove={game.lastMoveSquares}
+            priorMoves={priorMoves}
             interactive={game.status.kind === "active"}
             onSquareTap={game.tap}
             className="w-full"
