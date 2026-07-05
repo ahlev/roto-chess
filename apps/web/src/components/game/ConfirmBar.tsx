@@ -17,6 +17,7 @@ import {
   type Move,
   type Seat,
 } from "@rotochess/engine";
+import { PromotionPicker } from "@/components/game/PromotionPicker";
 
 const SEAT_BG: Record<Seat, string> = {
   1: "var(--north-red-bright)",
@@ -68,6 +69,14 @@ export function ConfirmBar({
   const warning = choice.evaporates === true;
   const token = moveToToken(state, choice);
   const seat = state.activeSeat;
+
+  // A promotion presents itself when every pending option promotes and at
+  // least two ranks are on offer — then the visual piece picker replaces the
+  // generic route pills.
+  const promoting =
+    pending.length > 1 &&
+    pending.every((m) => m.promotion) &&
+    new Set(pending.map((m) => m.promotion)).size > 1;
 
   const tone = warning
     ? "border-[color:var(--danger)] bg-[color:var(--warning-surface)]"
@@ -121,7 +130,15 @@ export function ConfirmBar({
               Avenger — crosses your meridian penalty-free
             </p>
           )}
-          {pending.length > 1 && (
+          {promoting && (
+            <PromotionPicker
+              seat={seat}
+              options={pending}
+              selected={choice}
+              onChoose={onChoose}
+            />
+          )}
+          {pending.length > 1 && !promoting && (
             <div className="mt-1 flex flex-wrap gap-2">
               {pending.map((m, i) => {
                 const label = [
