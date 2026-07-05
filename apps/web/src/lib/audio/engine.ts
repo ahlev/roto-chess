@@ -32,20 +32,61 @@ const CUE_TRIM: Record<CueName, number> = {
 };
 
 const STORAGE_KEY = "rc-sound-enabled";
+const STORAGE_KEY_VOL = "rc-sound-volume";
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let buffers: Record<CueName, AudioBuffer> | null = null;
 let enabled = true;
+/** 0..1 user level; scales the master ceiling. */
+let volume = 1;
 const lastPlayed = new Map<CueName, number>();
 const listeners = new Set<(on: boolean) => void>();
+const volumeListeners = new Set<(v: number) => void>();
+
+/** Clamp a volume level into 0..1. */
+export function clampVolume(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+const clamp01 = clampVolume;
+
+/**
+ * Decide the default enabled state from the stored choice and device class.
+ * An explicit choice always wins; with none, desktop is audible and mobile is
+ * quiet (surprise audio on a phone is jarring, and touch needs a tap anyway).
+ * Pure, so the policy can be unit-tested without a DOM.
+ */
+export function resolveEnabled(
+  stored: string | null,
+  touchPrimary: boolean,
+): boolean {
+  if (stored !== null) return stored !== "off";
+  return !touchPrimary;
+}
+
+/** Touch-primary device (phone/tablet): no hover, coarse pointer. */
+function isTouchPrimary(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
 
 function loadPreference(): boolean {
   if (typeof window === "undefined") return true;
-  // Default ON — only an explicit mute silences it. (An earlier build
-  // defaulted reduced-motion users to muted, which read as "sound is broken";
-  // reduced-motion should calm ambient layers, not kill every cue.)
-  return window.localStorage.getItem(STORAGE_KEY) !== "off";
+  // (Reduced-motion is deliberately NOT a reason to mute — that once read as
+  // "sound is broken"; it should calm ambient layers, not kill every cue.)
+  return resolveEnabled(window.localStorage.getItem(STORAGE_KEY), isTouchPrimary());
+}
+
+function loadVolume(): number {
+  if (typeof window === "undefined") return 1;
+  const raw = window.localStorage.getItem(STORAGE_KEY_VOL);
+  const n = raw === null ? 1 : Number(raw);
+  return Number.isFinite(n) ? clamp01(n) : 1;
+}
+
+/** Master gain target: muted → 0, else the ceiling scaled by the user volume. */
+function targetGain(): number {
+  return enabled ? MASTER_CEILING * volume : 0;
 }
 
 /** Create the context + render buffers. Safe to call repeatedly. */
@@ -59,8 +100,9 @@ function ensure(): AudioContext | null {
     if (!Ctor) return null;
     ctx = new Ctor();
     enabled = loadPreference();
+    volume = loadVolume();
     master = ctx.createGain();
-    master.gain.value = enabled ? MASTER_CEILING : 0;
+    master.gain.value = targetGain();
     master.connect(ctx.destination);
     const pcm = renderAll(ctx.sampleRate);
     buffers = {} as Record<CueName, AudioBuffer>;
@@ -110,12 +152,42 @@ export function setSoundEnabled(on: boolean): void {
   if (on) ensure(); // may create the context if toggled on pre-gesture
   if (ctx && master) {
     master.gain.cancelScheduledValues(ctx.currentTime);
-    master.gain.linearRampToValueAtTime(
-      on ? MASTER_CEILING : 0,
-      ctx.currentTime + 0.08,
-    );
+    master.gain.linearRampToValueAtTime(targetGain(), ctx.currentTime + 0.08);
   }
   for (const l of listeners) l(on);
+}
+
+/** Current volume level (0..1). */
+export function getVolume(): number {
+  return typeof window === "undefined" ? volume : loadVolume();
+}
+
+/** Set/persist the volume level. Nudging up from silence lifts a mute. */
+export function setVolume(v: number): void {
+  volume = clamp01(v);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(STORAGE_KEY_VOL, String(volume));
+  }
+  // Dragging the level up is an intent to hear it — get a mute out of the way.
+  if (volume > 0 && !enabled) {
+    enabled = true;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, "on");
+    }
+    for (const l of listeners) l(true);
+  }
+  ensure(); // a slider drag is a gesture; safe to warm the engine
+  if (ctx && master) {
+    master.gain.cancelScheduledValues(ctx.currentTime);
+    master.gain.linearRampToValueAtTime(targetGain(), ctx.currentTime + 0.05);
+  }
+  for (const l of volumeListeners) l(volume);
+}
+
+/** Subscribe to volume changes (for the slider UI). Returns unsubscribe. */
+export function onVolumeChange(l: (v: number) => void): () => void {
+  volumeListeners.add(l);
+  return () => volumeListeners.delete(l);
 }
 
 /** Subscribe to enabled changes (for the toggle UI). Returns unsubscribe. */
