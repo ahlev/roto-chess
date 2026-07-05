@@ -55,6 +55,7 @@ import {
   rotationForSeat,
   snapToTargets,
 } from "./board-geometry";
+import { playCue } from "@/lib/audio/engine";
 
 const SEAT_BRIGHT: Record<Seat, string> = {
   1: "var(--north-red-bright)",
@@ -319,6 +320,7 @@ export function RotoBoard({
 
   // The +/- toggle: out to the full board if zoomed, in to your quadrant if not.
   const togglePreset = useCallback(() => {
+    playCue("zoom-detent");
     if (zoomRef.current.scale > 1.001) resetZoom();
     else zoomToOwnQuadrant();
   }, [resetZoom, zoomToOwnQuadrant]);

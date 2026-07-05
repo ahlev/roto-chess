@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MeridianRose } from "@/components/brand/MeridianRose";
+import { SoundToggle } from "@/components/audio/SoundToggle";
 import { BRAND } from "@/config/brand";
 import { useAuthStatus } from "@/lib/auth/useAuthStatus";
 
@@ -76,6 +77,7 @@ export function SiteHeader({
           </Link>
         ))}
         {rightSlot}
+        <SoundToggle />
         {auth && <AuthControl />}
       </nav>
     </header>

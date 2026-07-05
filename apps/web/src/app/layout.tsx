@@ -6,6 +6,7 @@ import {
   Source_Serif_4,
 } from "next/font/google";
 import { BRAND } from "@/config/brand";
+import { SoundController } from "@/components/audio/SoundController";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -62,6 +63,7 @@ export default function RootLayout({
         className={`${instrumentSerif.variable} ${instrumentSans.variable} ${sourceSerif.variable} ${plexMono.variable} antialiased`}
       >
         {children}
+        <SoundController />
       </body>
     </html>
   );

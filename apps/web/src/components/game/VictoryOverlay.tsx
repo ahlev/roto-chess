@@ -15,6 +15,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Team } from "@rotochess/engine";
 import type { VictoryContext } from "@/lib/game/victory";
+import { playCue } from "@/lib/audio/engine";
 
 /** The winning team's two hues, left→right; a muted parchment sweep for draws. */
 const TEAM_BAND: Record<Team, string> = {
@@ -66,7 +67,11 @@ export function VictoryOverlay({
     return () => clearTimeout(t);
   }, [enterDelayMs]);
 
-  // sound: victory — fire once when the card first appears (task #6).
+  // The victory/draw cue fires once, as the card first appears.
+  useEffect(() => {
+    if (!shown) return;
+    playCue(context.winningTeam ? "victory" : "draw");
+  }, [shown, context.winningTeam]);
 
   if (!shown) return null;
 

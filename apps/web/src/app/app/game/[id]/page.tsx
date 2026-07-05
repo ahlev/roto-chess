@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   gameToRotoPgn,
+  isInCheck,
   parseGame,
   partnerOf,
   type Seat,
@@ -27,6 +28,7 @@ import { SeatPlaques } from "@/components/game/SeatPlaques";
 import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { emitAttention } from "@/components/game/attention";
 import { useOnlineGame } from "@/components/game/useOnlineGame";
+import { useGameSounds } from "@/lib/audio/useGameSounds";
 import { victoryContext, type VictoryReason } from "@/lib/game/victory";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
@@ -102,6 +104,22 @@ export default function GameRoomPage({
       ? `Your move. The table is watching.${step}`
       : `${SEAT_NAME[seat]} is thinking…`;
   }, [game.state, game.gameStatus, game.result, game.mySeat, openingStep]);
+
+  // Move cues for every player's turn (the canonical list grows for remote
+  // moves too, so you hear the table play). Check is derived cheaply from the
+  // seat to move, and only while the game is live.
+  const checkedNow = useMemo(
+    () =>
+      game.gameStatus === "active" &&
+      game.state !== null &&
+      isInCheck(game.state, game.state.activeSeat),
+    [game.gameStatus, game.state],
+  );
+  useGameSounds({
+    turns: replay.turns ?? [],
+    checkedNow,
+    ready: replay.turns !== null,
+  });
 
   // The winning team, decoded from the shared row's result (null = draw).
   const winningTeam: Team | null =

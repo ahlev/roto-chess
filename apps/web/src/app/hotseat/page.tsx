@@ -17,6 +17,7 @@ import { CoachNotes } from "@/components/game/CoachNotes";
 import { NotationList } from "@/components/game/NotationList";
 import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { useHotseatGame } from "@/components/game/useHotseatGame";
+import { useGameSounds } from "@/lib/audio/useGameSounds";
 import { victoryContext } from "@/lib/game/victory";
 import { BRAND } from "@/config/brand";
 
@@ -43,6 +44,13 @@ export default function HotseatPage() {
 
   const orientation: Seat = rotateToActive ? game.state.activeSeat : 1;
   const openingStep = game.opening ? (game.stagedFirst ? 2 : 1) : null;
+
+  // Move / capture / halo / evaporation / check cues, fired as turns commit.
+  useGameSounds({
+    turns: game.turns,
+    checkedNow:
+      game.status.kind === "active" && game.status.inCheck.length > 0,
+  });
 
   const statusLine = useMemo(() => {
     const s = game.status;
