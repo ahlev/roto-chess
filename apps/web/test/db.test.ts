@@ -41,6 +41,8 @@ const USERS = {
   south: "00000000-0000-4000-8000-000000000003",
   west: "00000000-0000-4000-8000-000000000004",
   outsider: "00000000-0000-4000-8000-000000000099",
+  watcher: "00000000-0000-4000-8000-000000000010",
+  watcher2: "00000000-0000-4000-8000-000000000011",
 } as const;
 
 /** Run a block as a specific authenticated user (RLS applies). */
@@ -70,12 +72,14 @@ beforeAll(async () => {
     grant usage on schema auth to authenticated, anon;
     grant usage on schema public to authenticated, anon;
   `);
-  // --- the real migration, verbatim ---
-  const migration = readFileSync(
-    join(__dirname, "../supabase/migrations/0001_init.sql"),
-    "utf8",
-  );
-  await runSql(migration);
+  // --- the real migrations, verbatim, in order ---
+  for (const file of ["0001_init.sql", "0003_observers.sql"]) {
+    const migration = readFileSync(
+      join(__dirname, `../supabase/migrations/${file}`),
+      "utf8",
+    );
+    await runSql(migration);
+  }
   await runSql(`
     grant select, insert, update, delete on all tables in schema public to authenticated;
     grant execute on all functions in schema auth to authenticated, anon;
@@ -482,5 +486,258 @@ describe("submit_turn — ordering authority", () => {
     );
     expect(moveRows.rows).toHaveLength(plies);
     expect(moveRows.rows[0]!.notation).toContain("&"); // opening turns joined
+  });
+});
+
+describe("observer role", () => {
+  let gameId: string;
+  let tableId: string;
+  let code: string;
+
+  const joinCodeOf = async (id: string) =>
+    (
+      await db.query<{ join_code: string }>(
+        `select join_code from games where id = $1`,
+        [id],
+      )
+    ).rows[0]!.join_code;
+
+  beforeAll(async () => {
+    ({ gameId, tableId } = await createGame());
+    await joinAll(gameId); // four seats filled → status 'active'
+    code = await joinCodeOf(gameId);
+    await asUser(USERS.watcher, async () => {
+      await db.query(`select join_table_observer($1)`, [code]);
+    });
+  });
+
+  it("join_table_observer admits a watcher to an ACTIVE game, idempotently", async () => {
+    await asUser(USERS.watcher, async () => {
+      // Second call is a no-op, not an error.
+      const res = await db.query<{ join_table_observer: string }>(
+        `select join_table_observer($1)`,
+        [code],
+      );
+      expect(res.rows[0]!.join_table_observer).toBe(gameId);
+    });
+    const rows = await db.query(
+      `select user_id from table_observers where table_id = '${tableId}'`,
+    );
+    expect(rows.rows).toHaveLength(1);
+  });
+
+  it("a seated player calling join_table_observer gets the game id and NO observer row", async () => {
+    await asUser(USERS.east, async () => {
+      const res = await db.query<{ join_table_observer: string }>(
+        `select join_table_observer($1)`,
+        [code],
+      );
+      expect(res.rows[0]!.join_table_observer).toBe(gameId);
+    });
+    const rows = await db.query(
+      `select user_id from table_observers
+       where table_id = '${tableId}' and user_id = '${USERS.east}'`,
+    );
+    expect(rows.rows).toHaveLength(0);
+  });
+
+  it("an observer reads the game, seats, moves, and table — a stranger still reads nothing", async () => {
+    await asUser(USERS.watcher, async () => {
+      expect(
+        (await db.query(`select id from games where id = '${gameId}'`)).rows,
+      ).toHaveLength(1);
+      expect(
+        (
+          await db.query(
+            `select seat from game_players where game_id = '${gameId}'`,
+          )
+        ).rows,
+      ).toHaveLength(4);
+      expect(
+        (await db.query(`select id from tables where id = '${tableId}'`)).rows,
+      ).toHaveLength(1);
+      // moves may be empty (no turns yet) — the point is no RLS error and
+      // visibility is proven by games/game_players above.
+    });
+    await asUser(USERS.outsider, async () => {
+      expect(
+        (await db.query(`select id from games where id = '${gameId}'`)).rows,
+      ).toHaveLength(0);
+      expect(
+        (
+          await db.query(
+            `select user_id from table_observers where table_id = '${tableId}'`,
+          )
+        ).rows,
+      ).toHaveLength(0);
+    });
+  });
+
+  it("observers and players can read each other's profiles", async () => {
+    await asUser(USERS.watcher, async () => {
+      expect(
+        (
+          await db.query(
+            `select id from profiles where id = '${USERS.north}'`,
+          )
+        ).rows,
+      ).toHaveLength(1);
+    });
+    await asUser(USERS.north, async () => {
+      expect(
+        (
+          await db.query(
+            `select id from profiles where id = '${USERS.watcher}'`,
+          )
+        ).rows,
+      ).toHaveLength(1);
+    });
+    // Strangers still can't enumerate.
+    await asUser(USERS.outsider, async () => {
+      expect(
+        (
+          await db.query(
+            `select id from profiles where id = '${USERS.watcher}'`,
+          )
+        ).rows,
+      ).toHaveLength(0);
+    });
+  });
+
+  it("an observer reads table chat but team_only NEVER leaks to observers", async () => {
+    await asUser(USERS.north, async () => {
+      await db.query(
+        `insert into chat_messages (table_id, game_id, user_id, team_only, body)
+         values ('${tableId}', '${gameId}', '${USERS.north}', true, 'observer-proof secret')`,
+      );
+      await db.query(
+        `insert into chat_messages (table_id, user_id, body)
+         values ('${tableId}', '${USERS.north}', 'hello everyone')`,
+      );
+    });
+    await asUser(USERS.watcher, async () => {
+      const open = await db.query(
+        `select body from chat_messages where table_id = '${tableId}' and not team_only`,
+      );
+      expect(open.rows.length).toBeGreaterThanOrEqual(1);
+      const secret = await db.query(
+        `select body from chat_messages where table_id = '${tableId}' and team_only`,
+      );
+      expect(secret.rows).toHaveLength(0);
+    });
+  });
+
+  it("an observer can post to the table channel but NOT team_only", async () => {
+    await asUser(USERS.watcher, async () => {
+      await db.query(
+        `insert into chat_messages (table_id, user_id, body)
+         values ('${tableId}', '${USERS.watcher}', 'great move!')`,
+      );
+      await expect(
+        db.query(
+          `insert into chat_messages (table_id, game_id, user_id, team_only, body)
+           values ('${tableId}', '${gameId}', '${USERS.watcher}', true, 'sneaking in')`,
+        ),
+      ).rejects.toThrow();
+    });
+  });
+
+  it("an observer cannot insert game_actions", async () => {
+    await asUser(USERS.watcher, async () => {
+      await expect(
+        db.query(
+          `insert into game_actions (game_id, user_id, kind, ply_at)
+           values ('${gameId}', '${USERS.watcher}', 'draw_propose', 0)`,
+        ),
+      ).rejects.toThrow();
+    });
+  });
+
+  it("claiming a seat via join_game deletes the observer row", async () => {
+    // A fresh LOBBY game: creator seated at 1, seats 2-4 open.
+    const fresh = await createGame();
+    const freshCode = await joinCodeOf(fresh.gameId);
+    await asUser(USERS.watcher2, async () => {
+      await db.query(`select join_table_observer($1)`, [freshCode]);
+      const seen = await db.query(
+        `select user_id from table_observers where table_id = '${fresh.tableId}'`,
+      );
+      expect(seen.rows).toHaveLength(1);
+      await db.query(`select join_game($1, 3::smallint)`, [freshCode]);
+    });
+    const after = await db.query(
+      `select user_id from table_observers where table_id = '${fresh.tableId}'`,
+    );
+    expect(after.rows).toHaveLength(0);
+    const seated = await db.query(
+      `select seat from game_players
+       where game_id = '${fresh.gameId}' and user_id = '${USERS.watcher2}'`,
+    );
+    expect(seated.rows).toEqual([{ seat: 3 }]);
+  });
+
+  it("an observer can stop watching; deleting someone ELSE's row is a silent no-op", async () => {
+    await asUser(USERS.watcher2, async () => {
+      await db.query(
+        `delete from table_observers where table_id = '${tableId}' and user_id = '${USERS.watcher}'`,
+      );
+    });
+    expect(
+      (
+        await db.query(
+          `select user_id from table_observers
+           where table_id = '${tableId}' and user_id = '${USERS.watcher}'`,
+        )
+      ).rows,
+    ).toHaveLength(1); // untouched — RLS delete is own-row only
+    await asUser(USERS.watcher, async () => {
+      await db.query(
+        `delete from table_observers where table_id = '${tableId}' and user_id = '${USERS.watcher}'`,
+      );
+    });
+    expect(
+      (
+        await db.query(
+          `select user_id from table_observers where table_id = '${tableId}'`,
+        )
+      ).rows,
+    ).toHaveLength(0);
+  });
+
+  it("a completed game is not watchable", async () => {
+    const done = await createGame();
+    const doneCode = await joinCodeOf(done.gameId);
+    await db.query(
+      `update games set status = 'complete', result = 'draw' where id = $1`,
+      [done.gameId],
+    );
+    await asUser(USERS.watcher, async () => {
+      await expect(
+        db.query(`select join_table_observer($1)`, [doneCode]),
+      ).rejects.toThrow(/GAME_NOT_WATCHABLE/);
+    });
+  });
+
+  it("the 21st observer is refused", async () => {
+    const packed = await createGame();
+    const packedCode = await joinCodeOf(packed.gameId);
+    // Service-context: seed 20 observers (auth.users + profiles first — FKs).
+    for (let i = 0; i < 20; i++) {
+      const uid = `00000000-0000-4000-9000-0000000000${String(i).padStart(2, "0")}`;
+      await db.query(`insert into auth.users (id) values ($1)`, [uid]);
+      await db.query(
+        `insert into profiles (id, display_name) values ($1, $2)`,
+        [uid, `crowd-${i}`],
+      );
+      await db.query(
+        `insert into table_observers (table_id, user_id) values ($1, $2)`,
+        [packed.tableId, uid],
+      );
+    }
+    await asUser(USERS.watcher, async () => {
+      await expect(
+        db.query(`select join_table_observer($1)`, [packedCode]),
+      ).rejects.toThrow(/TABLE_FULL_OBSERVERS/);
+    });
   });
 });
