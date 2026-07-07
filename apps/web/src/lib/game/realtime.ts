@@ -104,5 +104,7 @@ export function subscribeToObservers(
         if (!old.table_id || old.table_id === tableId) onChange();
       },
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") onChange();
+    });
 }
