@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { SEAT_COMPASS, type Seat } from "@rotochess/engine";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
+import { joinView } from "@/lib/game/joinView";
 
 const SEAT_NAME: Record<Seat, string> = {
   1: "North",
@@ -28,6 +29,8 @@ export default function JoinPage({
   const router = useRouter();
   const supabase = browserClient();
   const [openSeats, setOpenSeats] = useState<Seat[] | null>(null);
+  const [canSpectate, setCanSpectate] = useState(false);
+  const [liveGame, setLiveGame] = useState(false);
   const [tableName, setTableName] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -50,17 +53,16 @@ export default function JoinPage({
             game_status: string;
           }> | null
         )?.[0];
-        if (!row || row.game_status !== "lobby") {
+        const view = joinView(row?.game_status ?? null, row?.taken_seats ?? []);
+        if (view.stale) {
           setStale(true);
           setOpenSeats([]);
           return;
         }
-        setTableName(row.table_name);
-        setOpenSeats(
-          ([1, 2, 3, 4] as const).filter(
-            (s) => !row.taken_seats.includes(s),
-          ),
-        );
+        setTableName(row?.table_name ?? null);
+        setOpenSeats(view.openSeats);
+        setCanSpectate(view.canSpectate);
+        setLiveGame(row?.game_status === "active");
       });
   }, [supabase, code]);
 
@@ -95,6 +97,31 @@ export default function JoinPage({
           ? "That seat just filled. Pick another."
           : rpcError.message.includes("GAME_NOT_JOINABLE")
             ? "This table isn't seating — the code may be stale."
+            : "The table wobbled. Try again.",
+      );
+      setBusy(false);
+      return;
+    }
+    router.push(`/app/game/${data as string}`);
+  };
+
+  const watch = async () => {
+    if (!signedIn) {
+      router.push(`/login?redirect=${encodeURIComponent(`/join/${code}`)}`);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { data, error: rpcError } = await supabase.rpc(
+      "join_table_observer",
+      { p_code: code },
+    );
+    if (rpcError) {
+      setError(
+        rpcError.message.includes("GAME_NOT_WATCHABLE")
+          ? "This game isn't open to watchers — the code may be stale."
+          : rpcError.message.includes("TABLE_FULL_OBSERVERS")
+            ? "The rail is crowded — no more watchers fit at this table."
             : "The table wobbled. Try again.",
       );
       setBusy(false);
@@ -150,10 +177,21 @@ export default function JoinPage({
           </button>
         ))}
       </div>
-      {openSeats !== null && openSeats.length === 0 && !stale && (
-        <p className="pt-3 text-center text-xs text-text-dim">
-          All four seats are warm.
+      {liveGame && (
+        <p className="pb-2 text-center text-sm text-text-dim">
+          The game is under way. There's room at the rail.
         </p>
+      )}
+      {canSpectate && (
+        <button
+          type="button"
+          data-testid="join-spectate"
+          disabled={busy || signedIn === null}
+          onClick={() => void watch()}
+          className="mt-2 min-h-11 w-full rounded-lg border border-dashed border-line p-3 text-sm text-text-dim hover:bg-surface-raised disabled:opacity-50"
+        >
+          Watch as spectator
+        </button>
       )}
       {!signedIn && signedIn !== null && (
         <p className="pt-3 text-center text-xs text-text-dim">
