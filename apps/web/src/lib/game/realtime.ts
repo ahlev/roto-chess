@@ -73,3 +73,36 @@ export function subscribeToGame(
     });
   return channel;
 }
+
+/**
+ * Observer-list doorbell. INSERTs filter server-side; DELETE payloads carry
+ * only the old primary key and Supabase does not apply filters to them, so
+ * we match table_id client-side. Either way it's the same answer: refetch.
+ */
+export function subscribeToObservers(
+  supabase: SupabaseClient,
+  tableId: string,
+  onChange: () => void,
+): RealtimeChannel {
+  return supabase
+    .channel(`observers:${tableId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "table_observers",
+        filter: `table_id=eq.${tableId}`,
+      },
+      () => onChange(),
+    )
+    .on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "table_observers" },
+      (payload) => {
+        const old = payload.old as { table_id?: string };
+        if (!old.table_id || old.table_id === tableId) onChange();
+      },
+    )
+    .subscribe();
+}

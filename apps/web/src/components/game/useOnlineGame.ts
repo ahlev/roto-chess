@@ -24,7 +24,11 @@ import {
   type Turn,
 } from "@rotochess/engine";
 import { browserClient } from "@/lib/supabase/client";
-import { subscribeToGame } from "@/lib/game/realtime";
+import { subscribeToGame, subscribeToObservers } from "@/lib/game/realtime";
+import {
+  resolveViewerRole,
+  type ObserverInfo,
+} from "@/lib/game/observers";
 
 export interface SeatInfo {
   seat: Seat;
@@ -45,6 +49,10 @@ export interface OnlineGame {
   seats: SeatInfo[];
   /** The viewer's seat, or null (spectator). */
   mySeat: Seat | null;
+  /** Everyone watching this table (membership, not live presence). */
+  observers: ObserverInfo[];
+  /** True when the signed-in viewer is a spectator, not a seat. */
+  isObserver: boolean;
   state: BoardState | null;
   displayState: BoardState | null;
   stagedFirst: Move | null;
@@ -93,6 +101,7 @@ export function useOnlineGame(gameId: string): OnlineGame {
   const [error, setError] = useState<string | null>(null);
   const [row, setRow] = useState<GameRow | null>(null);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
+  const [observers, setObservers] = useState<ObserverInfo[]>([]);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [stagedFirst, setStagedFirst] = useState<Move | null>(null);
   const [selected, setSelected] = useState<Square | null>(null);
@@ -156,6 +165,22 @@ export function useOnlineGame(gameId: string): OnlineGame {
         .eq("game_id", gameId)
         .order("created_at");
       setActions((actionRows ?? []) as ActionRowView[]);
+      const { data: watcherRows } = await supabase
+        .from("table_observers")
+        .select("user_id, profiles(display_name)")
+        .eq("table_id", (game as { table_id: string }).table_id)
+        .order("created_at");
+      setObservers(
+        (
+          (watcherRows ?? []) as unknown as Array<{
+            user_id: string;
+            profiles: { display_name: string | null } | null;
+          }>
+        ).map((o) => ({
+          userId: o.user_id,
+          displayName: o.profiles?.display_name ?? "Guest",
+        })),
+      );
       const fresh = game as unknown as GameRow;
       // Snapshot moved under a staged/selected interaction → the staging is
       // meaningless against the new position: clear it.
@@ -222,10 +247,25 @@ export function useOnlineGame(gameId: string): OnlineGame {
     };
   }, [supabase, gameId, refetch]);
 
+  // Observer-list doorbell — separate channel because it's keyed by table,
+  // not game (the table id only becomes known after the first fetch).
+  useEffect(() => {
+    if (!supabase || !row?.table_id) return;
+    const channel = subscribeToObservers(supabase, row.table_id, () =>
+      void refetch(),
+    );
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, row?.table_id, refetch]);
+
   const mySeat = useMemo<Seat | null>(() => {
     const mine = seats.find((s) => s.userId === myUserId);
     return mine?.seat ?? null;
   }, [seats, myUserId]);
+
+  const isObserver =
+    resolveViewerRole(mySeat, myUserId, observers) === "observer";
 
   const myTurn =
     state !== null &&
@@ -406,6 +446,8 @@ export function useOnlineGame(gameId: string): OnlineGame {
     resultReason: row?.result_reason ?? null,
     seats,
     mySeat,
+    observers,
+    isObserver,
     state,
     displayState,
     stagedFirst,
