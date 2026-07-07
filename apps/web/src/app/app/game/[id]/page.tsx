@@ -13,6 +13,7 @@ import {
   isInCheck,
   parseGame,
   partnerOf,
+  SEAT_COMPASS,
   type Seat,
   type Team,
   type Turn,
@@ -24,6 +25,7 @@ import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { NotationList } from "@/components/game/NotationList";
 import { ChatPanel, type ChatOpenRequest } from "@/components/game/ChatPanel";
 import { EndGameActions } from "@/components/game/EndGameActions";
+import { ObserverRail } from "@/components/game/ObserverRail";
 import { SeatPlaques } from "@/components/game/SeatPlaques";
 import { VictoryOverlay } from "@/components/game/VictoryOverlay";
 import { emitAttention } from "@/components/game/attention";
@@ -201,9 +203,9 @@ export default function GameRoomPage({
           className="w-full opacity-90"
         />
         <div className="mt-4">
-          {/* RLS admits only participants to this page, so everyone here is
-              already seated — empty plaques are invitations for the LINK,
-              not buttons. Joining happens through /join/[code]. */}
+          {/* RLS admits participants AND observers to this page. Seated
+              players see empty plaques as invitations for the LINK; an
+              observer additionally gets tap-to-claim buttons below. */}
           <SeatPlaques
             seats={game.seats}
             mySeat={game.mySeat}
@@ -211,6 +213,13 @@ export default function GameRoomPage({
             vacantHint="open — send the link"
           />
         </div>
+        <ObserverRail
+          observers={game.observers}
+          isObserver={game.isObserver}
+          tableId={game.tableId}
+          myUserId={game.myUserId}
+        />
+        {game.isObserver && <ClaimSeatButtons game={game} />}
         <div className="mt-4 rounded-lg border border-line bg-surface p-3 text-center">
           <p className="text-xs text-text-dim">Fill the seats</p>
           <p
@@ -228,7 +237,7 @@ export default function GameRoomPage({
           </button>
           <p className="mt-2 text-xs text-text-dim">
             {game.seats.length}/4 seated — the game opens when the table is
-            full.
+            full.{game.isObserver ? " You're watching from the rail." : ""}
           </p>
         </div>
       </main>
@@ -245,6 +254,12 @@ export default function GameRoomPage({
         activeSeat={game.gameStatus === "active" ? game.state.activeSeat : null}
         onSeatClick={openChatFor}
       />
+      <ObserverRail
+        observers={game.observers}
+        isObserver={game.isObserver}
+        tableId={game.tableId}
+        myUserId={game.myUserId}
+      />
 
       <div className="relative py-2">
         <p
@@ -252,6 +267,11 @@ export default function GameRoomPage({
           data-testid="status-line"
           className="px-16 text-center text-sm text-text-dim"
         >
+          {game.isObserver && (
+            <span className="mr-2 inline-block rounded-full border border-line px-2 py-0.5 text-[10px] uppercase tracking-wide text-text-dim">
+              Observing
+            </span>
+          )}
           {isMyTurn ? (
             <>
               {/* Strong your-turn treatment; a board-level glow ships
@@ -379,7 +399,7 @@ export default function GameRoomPage({
         </div>
       )}
 
-      {game.state && (
+      {game.state && game.mySeat !== null && (
         <ConfirmBar
           state={
             game.stagedFirst && game.displayState
@@ -719,6 +739,120 @@ function HistoryPane({
         <NotationList turns={turns} />
       ) : (
         <p className="p-3 text-sm text-text-dim">Reading the record…</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The observer's path to a chair: open seats are flagged; tapping one asks
+ * for explicit confirmation before join_game locks it in. SEAT_TAKEN mid-
+ * dialog is survivable — the doorbell refetch redraws the open seats.
+ */
+function ClaimSeatButtons({
+  game,
+}: {
+  game: ReturnType<typeof useOnlineGame>;
+}) {
+  const [confirmSeat, setConfirmSeat] = useState<Seat | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const openSeats = ([1, 2, 3, 4] as const).filter(
+    (s) => !game.seats.some((p) => p.seat === s),
+  );
+  if (openSeats.length === 0) return null;
+
+  const claim = async (seat: Seat) => {
+    const supabase = browserClient();
+    if (!supabase || !game.joinCode || busy) return;
+    setBusy(true);
+    setNote(null);
+    const { error } = await supabase.rpc("join_game", {
+      p_code: game.joinCode,
+      p_seat: seat,
+    });
+    setBusy(false);
+    setConfirmSeat(null);
+    if (error) {
+      setNote(
+        error.message.includes("SEAT_TAKEN")
+          ? "That seat just filled. Pick another."
+          : error.message.includes("GAME_NOT_JOINABLE")
+            ? "The table isn't seating anymore."
+            : "The table wobbled. Try again.",
+      );
+    }
+    void game.refetch();
+  };
+
+  return (
+    <div className="mt-3 rounded-lg border border-dashed border-line p-3">
+      <p className="pb-2 text-center text-xs text-text-dim">
+        A seat is open — you could play this one.
+      </p>
+      {note && (
+        <p className="pb-2 text-center text-xs text-[color:var(--danger)]">
+          {note}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {openSeats.map((seat) => (
+          <button
+            key={seat}
+            type="button"
+            data-testid={`claim-seat-${seat}`}
+            disabled={busy}
+            onClick={() => setConfirmSeat(seat)}
+            className="min-h-11 rounded-lg border border-line p-2 text-sm text-text hover:bg-surface-raised disabled:opacity-50"
+          >
+            Take {SEAT_NAME[seat]} ({SEAT_COMPASS[seat]})
+          </button>
+        ))}
+      </div>
+      {confirmSeat !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Take a seat"
+          onClick={() => setConfirmSeat(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-line bg-surface-raised p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              className="text-lg text-text"
+              style={{ fontFamily: "var(--font-instrument-serif)" }}
+            >
+              Take the {SEAT_NAME[confirmSeat]} seat?
+            </p>
+            <p className="mt-1 text-sm text-text-dim">
+              You'll join this game as a player — the seat locks in when you
+              confirm, and you leave the rail.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmSeat(null)}
+                disabled={busy}
+                className="rounded-full border border-line px-4 py-2 text-sm text-text-dim"
+              >
+                Keep watching
+              </button>
+              <button
+                type="button"
+                data-testid="claim-seat-confirm"
+                onClick={() => void claim(confirmSeat)}
+                disabled={busy}
+                className="rounded-full bg-[color:var(--focus-ring)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)]"
+              >
+                {busy ? "Taking the seat…" : `Take ${SEAT_NAME[confirmSeat]}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
