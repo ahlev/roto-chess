@@ -506,6 +506,25 @@ describe("observer role", () => {
     ({ gameId, tableId } = await createGame());
     await joinAll(gameId); // four seats filled → status 'active'
     code = await joinCodeOf(gameId);
+    // One real turn and one game action, so the observer visibility test
+    // exercises moves_select and game_actions_select against actual rows.
+    const state = initialState();
+    const first = legalMoves(state)[0] as Move;
+    const second = legalSecondSubmoves(state, first)[0] as Move;
+    const prepared = prepareTurn(
+      serializeState(state),
+      0,
+      1,
+      toRef([first, second]),
+    );
+    if (!prepared.ok) throw new Error(prepared.error);
+    await callSubmitTurn(gameId, 0, 1, prepared);
+    await asUser(USERS.north, async () => {
+      await db.query(
+        `insert into game_actions (game_id, user_id, kind, ply_at)
+         values ('${gameId}', '${USERS.north}', 'draw_propose', 0)`,
+      );
+    });
     await asUser(USERS.watcher, async () => {
       await db.query(`select join_table_observer($1)`, [code]);
     });
@@ -541,7 +560,7 @@ describe("observer role", () => {
     expect(rows.rows).toHaveLength(0);
   });
 
-  it("an observer reads the game, seats, moves, and table — a stranger still reads nothing", async () => {
+  it("an observer reads the game, seats, moves, actions, and table — a stranger still reads nothing", async () => {
     await asUser(USERS.watcher, async () => {
       expect(
         (await db.query(`select id from games where id = '${gameId}'`)).rows,
@@ -556,12 +575,33 @@ describe("observer role", () => {
       expect(
         (await db.query(`select id from tables where id = '${tableId}'`)).rows,
       ).toHaveLength(1);
-      // moves may be empty (no turns yet) — the point is no RLS error and
-      // visibility is proven by games/game_players above.
+      // Real rows seeded in beforeAll: one submitted turn, one draw proposal.
+      expect(
+        (await db.query(`select ply from moves where game_id = '${gameId}'`))
+          .rows,
+      ).toHaveLength(1);
+      expect(
+        (
+          await db.query(
+            `select kind from game_actions where game_id = '${gameId}'`,
+          )
+        ).rows.length,
+      ).toBeGreaterThanOrEqual(1);
     });
     await asUser(USERS.outsider, async () => {
       expect(
         (await db.query(`select id from games where id = '${gameId}'`)).rows,
+      ).toHaveLength(0);
+      expect(
+        (await db.query(`select ply from moves where game_id = '${gameId}'`))
+          .rows,
+      ).toHaveLength(0);
+      expect(
+        (
+          await db.query(
+            `select kind from game_actions where game_id = '${gameId}'`,
+          )
+        ).rows,
       ).toHaveLength(0);
       expect(
         (

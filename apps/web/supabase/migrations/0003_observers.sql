@@ -163,7 +163,10 @@ begin
     raise exception 'NOT_AUTHENTICATED';
   end if;
 
-  select * into v_game from games where join_code = upper(p_code);
+  -- FOR UPDATE serializes concurrent watcher joins on the same game row (the
+  -- same single-row lock join_game takes — consistent ordering, no deadlock),
+  -- so the 20-observer cap below is a hard bound, not a best effort.
+  select * into v_game from games where join_code = upper(p_code) for update;
   if not found or v_game.status not in ('lobby', 'active') then
     raise exception 'GAME_NOT_WATCHABLE';
   end if;
