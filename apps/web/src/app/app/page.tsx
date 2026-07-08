@@ -117,8 +117,8 @@ export default function DashboardPage() {
     }));
 
     // Observed tables: every episode of a table I watch gets a card, shelved
-    // apart from games I play. (A claimed seat deletes the observer row, so
-    // a game never appears twice.)
+    // apart from games I play. Player-sourced games win — an episode the user
+    // played is skipped here even when they observe a newer episode at the same table.
     const { data: watchRows } = await supabase
       .from("table_observers")
       .select("table_id")
@@ -133,6 +133,7 @@ export default function DashboardPage() {
           "id, status, active_seat, state, last_move_at, result, result_reason, created_by, created_at, tables(name)",
         )
         .in("table_id", watchedTableIds);
+      const playerGameIds = new Set(base.map((g) => g.id));
       for (const gRow of (watchedGames ?? []) as unknown as Array<{
         id: string;
         status: string;
@@ -145,6 +146,7 @@ export default function DashboardPage() {
         created_at: string | null;
         tables: { name: string } | null;
       }>) {
+        if (playerGameIds.has(gRow.id)) continue;
         base.push({
           id: gRow.id,
           status: gRow.status,
