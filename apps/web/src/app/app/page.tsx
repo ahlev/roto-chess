@@ -16,6 +16,7 @@ import { RotoBoard } from "@/components/board/RotoBoard";
 import { SiteHeader } from "@/components/brand/SiteHeader";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
+import { bucketGames } from "@/lib/game/dashboardBuckets";
 
 interface Participant {
   seat: Seat;
@@ -29,7 +30,7 @@ interface CardRow {
   active_seat: number | null;
   state: unknown;
   last_move_at: string | null;
-  mySeat: Seat;
+  mySeat: Seat | null;
   tableName: string;
   result: string | null;
   /** How it ended (checkmate, resignation, …) — clever context on the card. */
@@ -42,6 +43,8 @@ interface CardRow {
   participants: Participant[];
   /** The owner's display name, resolved from the participants set. */
   ownerName: string | null;
+  /** Whether the viewer plays this game or watches it from the rail. */
+  role: "player" | "observer";
 }
 
 /** display_name → username → a seat label; profiles embed is to-one. */
@@ -82,7 +85,7 @@ export default function DashboardPage() {
         "seat, games!inner(id, status, active_seat, state, last_move_at, result, result_reason, created_by, created_at, tables(name))",
       )
       .eq("user_id", user.id);
-    const base = (
+    const base: Array<Omit<CardRow, "participants" | "ownerName">> = (
       (data ?? []) as unknown as Array<{
         seat: number;
         games: {
@@ -110,7 +113,54 @@ export default function DashboardPage() {
       resultReason: r.games.result_reason,
       createdBy: r.games.created_by,
       startedAt: r.games.created_at,
+      role: "player" as const,
     }));
+
+    // Observed tables: every episode of a table I watch gets a card, shelved
+    // apart from games I play. (A claimed seat deletes the observer row, so
+    // a game never appears twice.)
+    const { data: watchRows } = await supabase
+      .from("table_observers")
+      .select("table_id")
+      .eq("user_id", user.id);
+    const watchedTableIds = (watchRows ?? []).map(
+      (w) => (w as { table_id: string }).table_id,
+    );
+    if (watchedTableIds.length > 0) {
+      const { data: watchedGames } = await supabase
+        .from("games")
+        .select(
+          "id, status, active_seat, state, last_move_at, result, result_reason, created_by, created_at, tables(name)",
+        )
+        .in("table_id", watchedTableIds);
+      for (const gRow of (watchedGames ?? []) as unknown as Array<{
+        id: string;
+        status: string;
+        active_seat: number | null;
+        state: unknown;
+        last_move_at: string | null;
+        result: string | null;
+        result_reason: string | null;
+        created_by: string | null;
+        created_at: string | null;
+        tables: { name: string } | null;
+      }>) {
+        base.push({
+          id: gRow.id,
+          status: gRow.status,
+          active_seat: gRow.active_seat,
+          state: gRow.state,
+          last_move_at: gRow.last_move_at,
+          mySeat: null,
+          tableName: gRow.tables?.name ?? "A table",
+          result: gRow.result,
+          resultReason: gRow.result_reason,
+          createdBy: gRow.created_by,
+          startedAt: gRow.created_at,
+          role: "observer" as const,
+        });
+      }
+    }
 
     // Second pass: every seat at every one of my tables, with names. RLS lets
     // me read co-players' profiles for games I'm in. The owner's name falls
@@ -170,27 +220,7 @@ export default function DashboardPage() {
     if (signedIn === false) router.replace("/login?redirect=/app");
   }, [signedIn, router]);
 
-  const sections = useMemo(() => {
-    const yourTurn: CardRow[] = [];
-    const waiting: CardRow[] = [];
-    const settingUp: CardRow[] = [];
-    const finished: CardRow[] = [];
-    for (const row of rows ?? []) {
-      if (row.status === "lobby") settingUp.push(row);
-      else if (row.status === "active" && row.active_seat === row.mySeat)
-        yourTurn.push(row);
-      else if (row.status === "active") waiting.push(row);
-      else finished.push(row);
-    }
-    // Your turn: oldest wait first; waiting: most recent activity first.
-    yourTurn.sort((a, b) =>
-      (a.last_move_at ?? "").localeCompare(b.last_move_at ?? ""),
-    );
-    waiting.sort((a, b) =>
-      (b.last_move_at ?? "").localeCompare(a.last_move_at ?? ""),
-    );
-    return { yourTurn, waiting, settingUp, finished };
-  }, [rows]);
+  const sections = useMemo(() => bucketGames(rows ?? []), [rows]);
 
   // Title badge: "(2) Roto Chess" — restored on leave so the badge never
   // haunts another page's tab title.
@@ -280,6 +310,18 @@ export default function DashboardPage() {
             myUserId={myUserId}
             onDeleted={load}
           />
+          <Section
+            title="Observing"
+            rows={sections.observing}
+            myUserId={myUserId}
+            onDeleted={load}
+          />
+          <Section
+            title="Observer · finished"
+            rows={sections.observedFinished}
+            myUserId={myUserId}
+            onDeleted={load}
+          />
         </>
       )}
     </Shell>
@@ -365,9 +407,24 @@ const REASON_LABEL: Record<string, string> = {
 
 /** Viewer-relative status copy — never a raw enum like "team_13". */
 function cardStatus(row: CardRow): string {
+  if (row.role === "observer") {
+    if (row.status === "lobby") return "Watching — seats still filling";
+    if (row.status === "active") return "Watching from the rail";
+    if (row.status === "dormant") return "Watched — dormant";
+    if (row.status === "abandoned") return "Watched — closed as abandoned";
+    if (!row.result) return "Watched — finished";
+    const reason = row.resultReason
+      ? REASON_LABEL[row.resultReason]
+      : undefined;
+    const tail = reason ? ` · ${reason}` : "";
+    if (row.result === "draw") return `Watched — drawn${tail}`;
+    const winner = row.result === "team_13" ? "Red & Blue" : "Black & Gold";
+    return `Watched — ${winner} took the crown${tail}`;
+  }
+  const mySeat = row.mySeat as Seat; // players always have a seat
   if (row.status === "lobby") return "Waiting for seats";
   if (row.status === "active") {
-    return row.active_seat === row.mySeat
+    return row.active_seat === mySeat
       ? "Your move. The table is watching."
       : "Another seat is thinking";
   }
@@ -377,7 +434,7 @@ function cardStatus(row: CardRow): string {
   const reason = row.resultReason ? REASON_LABEL[row.resultReason] : undefined;
   const tail = reason ? ` · ${reason}` : "";
   if (row.result === "draw") return `Drawn${tail}`;
-  const myTeam = ((row.mySeat - 1) % 2) + 1;
+  const myTeam = ((mySeat - 1) % 2) + 1;
   const winnerTeam = row.result === "team_13" ? 1 : 2;
   const verdict =
     myTeam === winnerTeam ? "You took the crown" : "The crown went the other way";
@@ -414,14 +471,21 @@ function GameCard({
           {state && (
             <RotoBoard
               state={state}
-              orientation={row.mySeat}
+              orientation={row.mySeat ?? 1}
               interactive={false}
               className="h-full w-full"
             />
           )}
         </div>
         <div className="min-w-0 flex-1 pr-6">
-          <p className="truncate text-sm text-text">{row.tableName}</p>
+          <p className="truncate text-sm text-text">
+            {row.tableName}
+            {row.role === "observer" && (
+              <span className="ml-1.5 rounded-full border border-line px-1.5 py-0.5 align-middle text-[9px] uppercase tracking-wide text-text-dim">
+                Observer
+              </span>
+            )}
+          </p>
           <p className="text-xs text-text-dim">{cardStatus(row)}</p>
           {row.participants.length > 0 && (
             <ul className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
