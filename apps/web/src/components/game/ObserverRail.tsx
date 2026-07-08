@@ -23,39 +23,53 @@ export function ObserverRail({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   if (observers.length === 0) return null;
 
   const stopWatching = async () => {
     const supabase = browserClient();
     if (!supabase || !tableId || !myUserId || busy) return;
+    setDeleteError(null);
     setBusy(true);
-    await supabase
+    const { error } = await supabase
       .from("table_observers")
       .delete()
       .eq("table_id", tableId)
       .eq("user_id", myUserId);
+    if (error) {
+      setDeleteError("The table wobbled. Try again.");
+      setBusy(false);
+      return;
+    }
     router.push("/app");
   };
 
   return (
-    <p
-      data-testid="observer-rail"
-      className="truncate px-1 pt-1.5 text-center text-[11px] text-text-dim"
-    >
-      Observing: {observers.map((o) => o.displayName).join(", ")}
-      {isObserver && (
-        <>
-          {" · "}
-          <button
-            type="button"
-            onClick={() => void stopWatching()}
-            disabled={busy}
-            className="underline decoration-dotted underline-offset-2 hover:text-text"
-          >
-            stop watching
-          </button>
-        </>
+    <div>
+      <p
+        data-testid="observer-rail"
+        className="truncate px-1 pt-1.5 text-center text-[11px] text-text-dim"
+      >
+        Observing: {observers.map((o) => o.displayName).join(", ")}
+        {isObserver && (
+          <>
+            {" · "}
+            <button
+              type="button"
+              onClick={() => void stopWatching()}
+              disabled={busy}
+              className="underline decoration-dotted underline-offset-2 hover:text-text"
+            >
+              stop watching
+            </button>
+          </>
+        )}
+      </p>
+      {deleteError && (
+        <p className="truncate px-1 text-center text-[11px] text-text-dim">
+          {deleteError}
+        </p>
       )}
-    </p>
+    </div>
   );
 }
