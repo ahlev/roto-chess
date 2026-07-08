@@ -66,7 +66,11 @@ export function ObserverRail({
         )}
       </p>
       {deleteError && (
-        <p className="truncate px-1 text-center text-[11px] text-text-dim">
+        <p
+          aria-live="polite"
+          data-testid="observer-rail-error"
+          className="truncate px-1 text-center text-[11px] text-text-dim"
+        >
           {deleteError}
         </p>
       )}

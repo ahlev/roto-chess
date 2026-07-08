@@ -804,7 +804,10 @@ function ClaimSeatButtons({
             type="button"
             data-testid={`claim-seat-${seat}`}
             disabled={busy}
-            onClick={() => setConfirmSeat(seat)}
+            onClick={() => {
+              setConfirmSeat(seat);
+              setNote(null);
+            }}
             className="min-h-11 rounded-lg border border-line p-2 text-sm text-text hover:bg-surface-raised disabled:opacity-50"
           >
             Take {SEAT_NAME[seat]} ({SEAT_COMPASS[seat]})
