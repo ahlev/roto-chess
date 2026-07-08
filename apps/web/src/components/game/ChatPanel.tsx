@@ -18,6 +18,8 @@ import { partnerOf, type Seat } from "@rotochess/engine";
 import { browserClient } from "@/lib/supabase/client";
 import { emitAttention } from "@/components/game/attention";
 import { SEAT_CHIP, type PlaqueSeat } from "@/components/game/SeatPlaques";
+import { resolveSender } from "@/lib/game/chatSender";
+import type { ObserverInfo } from "@/lib/game/observers";
 
 /** Sender name colored by seat — the same palette as the plaques, carried
  * cleanly into the transcript so you know who's talking at a glance. */
@@ -53,6 +55,8 @@ export interface ChatPanelProps {
   /** Seat map for sender colors and partner routing (optional for lobby). */
   seats?: PlaqueSeat[];
   mySeat?: Seat | null;
+  /** Watchers at this table — greys + flags their messages. */
+  observers?: ObserverInfo[];
   /** Set by the page (seat-plaque clicks) to open a specific channel. */
   openRequest?: ChatOpenRequest | null;
   /** When set, the composer anchors the next message to this ply. */
@@ -72,6 +76,7 @@ export function ChatPanel({
   myUserId,
   seats = [],
   mySeat = null,
+  observers = [],
   openRequest = null,
   anchorPly = null,
   onClearAnchor,
@@ -392,18 +397,23 @@ export function ChatPanel({
               </p>
             )}
             {visibleRows.map((row) => {
-              const senderSeat =
-                seats.find((s) => s.userId === row.user_id)?.seat ?? null;
+              const sender = resolveSender(row.user_id, seats, observers);
               return (
                 <div key={row.id} className="min-w-0 break-words">
                   <span
                     className={`font-semibold ${
-                      senderSeat !== null
-                        ? SEAT_TEXT[senderSeat]
+                      sender.seat !== null
+                        ? SEAT_TEXT[sender.seat]
                         : "text-text-dim"
                     }`}
                   >
                     {row.displayName}
+                    {sender.observing && (
+                      <span className="font-normal text-text-dim">
+                        {" "}
+                        (observing)
+                      </span>
+                    )}
                   </span>{" "}
                   {row.anchor_ply !== null && (
                     <button

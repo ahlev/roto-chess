@@ -394,6 +394,7 @@ export default function GameRoomPage({
             myUserId={game.myUserId}
             seats={game.seats}
             mySeat={game.mySeat}
+            observers={game.observers}
             openRequest={chatRequest}
           />
         </div>
