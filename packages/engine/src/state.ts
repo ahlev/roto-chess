@@ -4,8 +4,8 @@
  * Immutable snapshot of a game in progress. Everything the rules need to
  * decide legality and everything §8.5 threefold repetition needs in its
  * position key lives here: placement with halo flags, has-moved tracking,
- * whose turn, en passant target, draw counters, and the Avenger rule's
- * capture memory. JSON-serializable as-is (the storage snapshot format).
+ * whose turn, en passant target, and draw counters. JSON-serializable as-is
+ * (the storage snapshot format).
  */
 
 import {
@@ -16,13 +16,12 @@ import {
   SEATS,
   type Seat,
   type Square,
-  type Team,
   formatSquare,
   seatSetup,
   squareOf,
 } from "./geometry.js";
 
-export const ENGINE_VERSION = "0.1.0";
+export const ENGINE_VERSION = "0.2.0";
 export const STATE_SCHEMA_VERSION = 1;
 
 export type PieceKind = "K" | "Q" | "R" | "B" | "N" | "P";
@@ -88,12 +87,6 @@ export interface BoardState {
    */
   epTargets: readonly EpTarget[];
   /**
-   * Avenger memory (§6.4, ruling R4): per team, has a piece been captured
-   * while still unmoved on its original starting square? Permanent once set.
-   * Index 0 = team 1 (seats 1,3), index 1 = team 2 (seats 2,4).
-   */
-  avengeableLoss: readonly [boolean, boolean];
-  /**
    * Fifty-move counter (§8.6): player-turns since the last pawn move or
    * capture. A double-move opening turn increments it by 1 (one turn).
    */
@@ -101,8 +94,8 @@ export interface BoardState {
   /**
    * Threefold repetition counts (§8.5): position key → times seen. The key
    * must include everything legal moves depend on: piece placement WITH halo
-   * flags and per-piece unmoved status, side to move, en passant target,
-   * Avenger memory, and the startPieceMoved bits castling rights derive
+   * flags and per-piece unmoved status, side to move, en passant target, and
+   * the startPieceMoved bits that castling rights and Avenger graves derive
    * from — positions differing only in any of these are different positions.
    * Read counts with `?? 0`; keys are engine-generated strings.
    */
@@ -117,10 +110,6 @@ export function inOpening(state: BoardState): boolean {
 /** 1-based round number (a round = four turns). */
 export function roundOf(ply: number): number {
   return Math.floor(ply / 4) + 1;
-}
-
-export function avengeableLossFor(state: BoardState, team: Team): boolean {
-  return state.avengeableLoss[team - 1] ?? false;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +150,21 @@ export function initialBoard(): (Piece | null)[] {
   return board;
 }
 
+/**
+ * Game-start occupant's seat, per square (null = empty at game start).
+ * Powers the Avenger rule's ending-position condition (§6.4, ruled
+ * 2026-07-18): a square is an own-team GRAVE when its game-start piece
+ * belonged to the mover's team, never moved (startPieceMoved false), and is
+ * gone from the square — i.e., it was captured in place.
+ */
+const INITIAL_SEATS: readonly (Seat | null)[] = initialBoard().map(
+  (piece) => piece?.seat ?? null,
+);
+
+export function initialSeatOf(square: Square): Seat | null {
+  return INITIAL_SEATS[square] ?? null;
+}
+
 export function initialState(): BoardState {
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
@@ -169,7 +173,6 @@ export function initialState(): BoardState {
     ply: 0,
     startPieceMoved: new Array<boolean>(SQUARE_COUNT).fill(false),
     epTargets: [],
-    avengeableLoss: [false, false],
     halfmoveClock: 0,
     repetition: {},
   };
@@ -238,15 +241,6 @@ export function deserializeState(json: string): BoardState {
     Array.isArray(state.repetition)
   ) {
     throw new Error("Invalid state: repetition");
-  }
-  if (
-    !Array.isArray(state.avengeableLoss) ||
-    state.avengeableLoss.length !== 2 ||
-    (state.avengeableLoss as readonly unknown[]).some(
-      (b) => typeof b !== "boolean",
-    )
-  ) {
-    throw new Error("Invalid state: avengeableLoss");
   }
   for (const raw of state.board as readonly unknown[]) {
     if (raw === null) continue;

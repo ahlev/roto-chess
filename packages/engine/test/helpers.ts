@@ -40,7 +40,6 @@ export interface StateSpec {
   /** Completed turns; default 20 (post-opening single-move play). */
   ply?: number;
   epTargets?: EpTarget[];
-  avengeableLoss?: [boolean, boolean];
   halfmoveClock?: number;
   /** Extra squares (display coords) whose game-start piece has moved away. */
   startMoved?: string[];
@@ -104,7 +103,6 @@ export function buildState(spec: StateSpec): BoardState {
     ply: spec.ply ?? 20,
     startPieceMoved,
     epTargets: spec.epTargets ?? [],
-    avengeableLoss: spec.avengeableLoss ?? [false, false],
     halfmoveClock: spec.halfmoveClock ?? 0,
     repetition: {},
   };

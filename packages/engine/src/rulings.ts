@@ -31,19 +31,14 @@ export const OPENING_NO_PAIR_IS_NO_LEGAL_TURN: boolean = true;
 export const CASTLE_OPENING_SIDE_ANCHOR: "king" | "queen" = "king";
 
 /**
- * R4a — Does Avenger eligibility expire after a time window? V1 default:
- * no window — eligibility persists while both §6.4 conditions hold.
- * STRUCTURAL: the no-window default is the absence of a ply check in
- * avengerEligible (legal.ts); a window would add a capturedAtPly record to
- * the avenger memory. Recorded here so the decision stays visible.
+ * R4 — RULED by Andrew 2026-07-18 (no longer an open ambiguity; the former
+ * R4a/R4b flags are retired). An Avenger move must CAPTURE the enemy piece
+ * standing on the grave of an own-team piece that was captured on its start
+ * square before it ever moved. No time window exists because none is needed:
+ * "recent" is encoded positionally — once the intruder leaves the grave,
+ * there is nothing to avenge there. Encoded directly in avengerEligible
+ * (legal.ts); see docs/RULINGS.md § R4 for the ruling record.
  */
-export const AVENGER_HAS_TIME_WINDOW: boolean = false;
-
-/**
- * R4b — Must the avenging move itself be a capture? V1 default: no —
- * §6.4's two written conditions are the entire test.
- */
-export const AVENGER_MOVE_MUST_CAPTURE: boolean = false;
 
 /**
  * R5 — En passant window: the target expires when the immediately-following

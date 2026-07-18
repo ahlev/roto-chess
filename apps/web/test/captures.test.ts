@@ -39,7 +39,6 @@ interface Spec {
   activeSeat?: Seat;
   ply?: number;
   epTargets?: EpTarget[];
-  avengeableLoss?: [boolean, boolean];
 }
 
 function buildState(spec: Spec): BoardState {
@@ -84,7 +83,6 @@ function buildState(spec: Spec): BoardState {
     ply: spec.ply ?? 20,
     startPieceMoved,
     epTargets: spec.epTargets ?? [],
-    avengeableLoss: spec.avengeableLoss ?? [false, false],
     halfmoveClock: 0,
     repetition: {},
   };
@@ -203,10 +201,11 @@ describe("fallenPieces — evaporation (the meridian claims the mover)", () => {
     // Non-haloed seat-1 knight at 2B captures across its own meridian at
     // 32C: the capture completes, then the knight evaporates (§6.3). Two
     // pieces leave the board — the East pawn (taken by North) and the
-    // North knight (evaporated).
+    // North knight (evaporated). The knight has moved off its 1C home, so
+    // the §6.4 Avenger exemption cannot apply.
     const state = buildState({
       pieces: [
-        { at: "2B", kind: "N", seat: 1 },
+        { at: "2B", kind: "N", seat: 1, hasMoved: true, origin: "1C" },
         { at: "32C", kind: "P", seat: 2, hasMoved: true, origin: "10C" },
       ],
       activeSeat: 1,

@@ -112,7 +112,6 @@ describe("initial position (§2.5–2.7)", () => {
     expect(inOpening(state)).toBe(true);
     expect(roundOf(state.ply)).toBe(1);
     expect(state.epTargets).toEqual([]);
-    expect(state.avengeableLoss).toEqual([false, false]);
     expect(state.halfmoveClock).toBe(0);
     expect(state.repetition).toEqual({});
   });
@@ -147,11 +146,22 @@ describe("serialization", () => {
           createdAtPly: 8,
         },
       ],
-      avengeableLoss: [true, false] as const,
       halfmoveClock: 4,
       repetition: { somekey: 2, otherkey: 1 },
     };
     expect(deserializeState(serializeState(state))).toEqual(state);
+  });
+
+  it("tolerates the retired avengeableLoss field in pre-0.2.0 snapshots", () => {
+    // Engine 0.1.0 snapshots carry the R4-era team flag; it is ignored.
+    const legacy = JSON.parse(serializeState(initialState())) as Record<
+      string,
+      unknown
+    >;
+    legacy["avengeableLoss"] = [true, false];
+    const restored = deserializeState(JSON.stringify(legacy));
+    expect(restored.board.length).toBe(128);
+    expect(restored.activeSeat).toBe(1);
   });
 
   it("rejects structurally broken snapshots", () => {

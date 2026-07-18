@@ -253,17 +253,18 @@ describe("pawn details", () => {
 });
 
 describe("avenger × opening (§6.4 × §4.2)", () => {
-  it("an avenger crossing works as an opening submove", () => {
+  it("an avenger grave-capture works as an opening submove", () => {
     const state = buildState({
       pieces: [
         { at: "1C", kind: "N", seat: 1 }, // unmoved on origin, cw side
         { at: "31A", kind: "P", seat: 1 }, // ccw-side pairing material
+        // Intruder on 31B — the grave of seat 1's pawn, dead unmoved there.
+        { at: "31B", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
       ],
       activeSeat: 1,
       ply: 8,
-      avengeableLoss: [true, false],
     });
-    const first = mv(state, "1C", "31B"); // crosses the meridian
+    const first = mv(state, "1C", "31B"); // captures across the meridian
     expect(first.avenger).toBe(true);
     const result = applyTurn(state, {
       submoves: [
@@ -275,8 +276,12 @@ describe("avenger × opening (§6.4 × §4.2)", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(at(result.state, "31B")?.kind).toBe("N"); // survived, unhaloed
-      expect(at(result.state, "31B")?.halo).toBe(false);
+      // Survived the crossing via §6.4; the capture itself earned the halo
+      // (§6.2) — but a just-earned halo never saves an evaporator (§6.3),
+      // so survival here proves the Avenger exemption, not the halo.
+      expect(at(result.state, "31B")?.kind).toBe("N");
+      expect(at(result.state, "31B")?.seat).toBe(1);
+      expect(at(result.state, "31B")?.halo).toBe(true);
     }
   });
 });

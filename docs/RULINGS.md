@@ -75,25 +75,46 @@ with an opening castle — a narrow, strategic nuance with no effect after round
 
 ## R4 — Avenger: how "recent," and must the avenging move capture?
 
-**The decision.** §6.4 exempts a non-haloed primary piece crossing its own
-meridian if it is "avenging the recent loss" of a team piece, with two explicit
-conditions (avenger unmoved on its start square; victim lost from its own start
-square). "Recent" is undefined, and the rule doesn't say the avenging move must
-itself capture.
+**Status: RULED by Andrew, 2026-07-18 — CHANGE.** The V1 assumption below is
+superseded; the corrected rule is implemented as of engine 0.2.0.
 
-**V1 assumes: eligibility persists while the two §6.4 conditions hold — no time
-window — and the avenging move need not capture.** The two written conditions
-are the entire test; adding an unwritten timer or an unwritten capture
-requirement would be inventing rules. Once one of your team's unmoved pieces has
-been captured on its start square, any of your still-unmoved primaries may cross
-your meridian penalty-free (until that avenging piece itself moves, which ends
-its own eligibility by breaking condition 1).
+**The ruling.** "Avenging" links the crossing to the specific capture being
+made. In Andrew's words: *"the pieces in both the starting and ending positions
+need to have not moved for the avenger rule to take effect… It is only
+'avenging' a loss if the attacking [piece] had taken a [piece] in its starting
+position."* Operationally, an Avenger move must satisfy all three:
 
-**Keep vs. change.** Keeping it: simple, teachable, matches the written text.
-Changing to a tight window (e.g., only until your next turn ends): makes the
-Avenger a rare reactive tactic rather than a standing right — a genuine gameplay
-difference worth a table conversation. Code flip: predicate `isAvengingMove` in
-one function; a window variant would add a `capturedAtPly` check.
+1. The avenging piece has never moved (it is on its original starting square).
+2. The move **captures** an enemy piece.
+3. The **destination square** is the original starting square of an own-team
+   piece that was captured there before it ever moved — the enemy being taken
+   is standing on an unmoved teammate's grave.
+
+Consequences of the positional reading: no time window is needed ("recent" is
+encoded by the position — once the intruder leaves the grave, there is nothing
+to avenge there); quiet crossings are never exempt; the exemption is per-move,
+not a standing team right, so no Avenger memory exists in game state.
+
+**How this surfaced.** Archived game 2HPMK, ply 25 (`NC1xB31*^`): the engine's
+V1 interpretation exempted an unmoved knight because a team-wide flag had been
+armed seven plies earlier by an unrelated capture (rook took the unmoved B2
+pawn). B31's own pawn had already moved, so under the corrected rule the
+capture avenged nothing and the knight should have evaporated after taking.
+A tester flagged the surviving crossing; Andrew's clarification confirmed the
+tester's instinct. That game (engine 0.1.0) is knowingly divergent from the
+corrected rule and is preserved as played.
+
+**Superseded V1 assumption (history).** *Eligibility persists while the two
+§6.4 conditions hold — no time window — and the avenging move need not
+capture.* This made the exemption a permanent team-wide right after any
+unmoved-piece loss anywhere, tracked in a sticky `avengeableLoss` state flag
+(removed in 0.2.0). The reading was textually defensible — §6.4 never
+explicitly linked the avenged loss to the avenging move — which is why it was
+recorded here for ratification rather than silently assumed.
+
+**Code.** Encoded directly in `avengerEligible` (`packages/engine/src/legal.ts`)
+as a stateless check against `startPieceMoved` and the initial-occupant map.
+The R4a/R4b constants in `rulings.ts` are retired.
 
 ---
 

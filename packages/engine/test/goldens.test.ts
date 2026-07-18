@@ -26,11 +26,11 @@ function load(name: string) {
 describe("golden games", () => {
   it("the showcase game replays to checkmate with all five features", () => {
     const parsed = parseGame(load("golden-showcase.rpgn"));
-    expect(parsed.turns.length).toBe(203);
+    expect(parsed.turns.length).toBe(189);
     const fold = playGame(parsed.turns);
     expect(fold.finalStatus.kind).toBe("checkmate");
     if (fold.finalStatus.kind === "checkmate") {
-      expect(fold.finalStatus.matedSeat).toBe(4);
+      expect(fold.finalStatus.matedSeat).toBe(2);
     }
     // Feature census across the whole game:
     const features = {
@@ -49,12 +49,12 @@ describe("golden games", () => {
       halo: true, evaporation: true, castle: true, ep: true, promo: true,
     });
     // Lock the exact final position.
-    expect(positionKey(fold.finalState)).toMatchInlineSnapshot(`"1|4|10:Q1hp|40:K3|80:K4|81:Q3hp|86:K1|111:K2|af0000bfff0000efff00006fff0000dd||11"`);
+    expect(positionKey(fold.finalState)).toMatchInlineSnapshot(`"1|2|3:K1|4:K2|33:Q3hp|43:P3|44:K3|90:K4|116:R1h|ff00004fbf0000efbf00006fef0000ef|"`);
   });
 
   it("golden game 2 replays to checkmate", () => {
     const parsed = parseGame(load("golden-2.rpgn"));
-    expect(parsed.turns.length).toBe(237);
+    expect(parsed.turns.length).toBe(145);
     expect(evaluateStatus(parsed.finalState).kind).toBe("checkmate");
   });
 

@@ -91,7 +91,8 @@ describe("token shape", () => {
   it("evaporating capture carries BOTH marks: halo earned (*), then evaporated (†)", () => {
     const state = buildState({
       pieces: [
-        { at: "2B", kind: "N", seat: 1 },
+        // Moved off its 1C home so §6.4 can't exempt the crossing.
+        { at: "2B", kind: "N", seat: 1, hasMoved: true, origin: "1C" },
         { at: "32C", kind: "P", seat: 2, hasMoved: true, origin: "10C" },
       ],
       activeSeat: 1,
@@ -379,7 +380,8 @@ describe("moveToDisplay (TDD §3.1 abbreviated form)", () => {
     expect(moveToDisplay(halo, mv(halo, "5B", "5C"))).toBe("RxC5*");
     const evap = buildState({
       pieces: [
-        { at: "2B", kind: "N", seat: 1 },
+        // Moved off its 1C home so §6.4 can't exempt the crossing.
+        { at: "2B", kind: "N", seat: 1, hasMoved: true, origin: "1C" },
         { at: "32C", kind: "P", seat: 2, hasMoved: true, origin: "10C" },
       ],
       activeSeat: 1,

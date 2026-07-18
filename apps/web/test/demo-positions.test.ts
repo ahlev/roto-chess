@@ -44,13 +44,17 @@ describe("rules §5 demo scenarios — engine flags", () => {
     expect(pick?.evaporates ?? false).toBe(false); // preview the clean one
   });
 
-  it("§5.4 — an unmoved knight whose team was wounded crosses penalty-free", () => {
-    const s = demoState([{ at: "1C", kind: "N", seat: 1 }], 1, {
-      avengeableLoss: [true, false],
-    });
+  it("§5.4 — an unmoved knight avenges by capturing the intruder on a fallen teammate's square", () => {
+    // 31B is the home square of North's pawn, captured there before it ever
+    // moved (absent + startPieceMoved false); an intruder stands on it.
+    const s = demoState([
+      { at: "1C", kind: "N", seat: 1 },
+      { at: "31B", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
+    ]);
     const moves = legalMovesFrom(s, parseSquare("1C"));
     const avengerMoves = moves.filter((m) => m.avenger);
     expect(avengerMoves.length).toBeGreaterThan(0);
+    expect(avengerMoves.every((m) => m.to === parseSquare("31B"))).toBe(true);
     // Avenger and evaporation are mutually exclusive — the exemption saves it.
     expect(avengerMoves.every((m) => !m.evaporates)).toBe(true);
   });

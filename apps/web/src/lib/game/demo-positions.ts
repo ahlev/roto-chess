@@ -27,7 +27,7 @@ interface Spec {
 export function demoState(
   pieces: Spec[],
   activeSeat: Seat = 1,
-  opts?: { ply?: number; startMoved?: string[]; avengeableLoss?: [boolean, boolean] },
+  opts?: { ply?: number; startMoved?: string[] },
 ): BoardState {
   const board: (Piece | null)[] = new Array<Piece | null>(SQUARE_COUNT).fill(
     null,
@@ -74,7 +74,6 @@ export function demoState(
     ply: opts?.ply ?? 20,
     startPieceMoved,
     epTargets: [],
-    avengeableLoss: opts?.avengeableLoss ?? [false, false],
     halfmoveClock: 0,
     repetition: {},
   };

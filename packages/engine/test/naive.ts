@@ -44,6 +44,21 @@ function enemyBackRanks(seat: number): number[] {
   return out;
 }
 
+/**
+ * §2.5–2.7 re-derived: which seat's piece starts on rank `r`? Each seat's
+ * home ranks are its two back ranks plus the pawn rank outside each (every
+ * file of those ranks is occupied at game start); other ranks start empty.
+ */
+function homeSeatOfRank(r: number): number | null {
+  for (const s of [1, 2, 3, 4]) {
+    const [ccw, cw] = BACKS[s]!;
+    if (r === ccw || r === cw || r === wrap(ccw - 1) || r === wrap(cw + 1)) {
+      return s;
+    }
+  }
+  return null;
+}
+
 /** Does walking `steps` ranks from `from` in `dir` cross seat's own meridian? */
 function crosses(seat: number, from: number, steps: number, dir: number): boolean {
   const b = MER[seat]!;
@@ -302,10 +317,16 @@ function toNaiveMoves(
       let evaporates = false;
       let avenger = false;
       if (crossed && PRIMARY.has(piece.kind) && !piece.halo) {
+        // §6.4 (ruled 2026-07-18): capture the intruder standing where an
+        // own-team piece started, never moved, and is gone — died in place.
+        const graveSeat = homeSeatOfRank(rk(w.to));
         const eligible =
           !piece.hasMoved &&
           !piece.promoted &&
-          (state.avengeableLoss[team(piece.seat) - 1] ?? false);
+          w.captures !== null &&
+          graveSeat !== null &&
+          team(graveSeat) === team(piece.seat) &&
+          !(state.startPieceMoved[w.to] ?? false);
         if (eligible) avenger = true;
         else evaporates = true;
       }

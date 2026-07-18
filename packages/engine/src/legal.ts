@@ -38,6 +38,7 @@ import {
   type Piece,
   STATE_SCHEMA_VERSION,
   inOpening,
+  initialSeatOf,
   isPrimary,
 } from "./state.js";
 import {
@@ -51,7 +52,6 @@ import {
   movesEffectIdentical,
 } from "./moves.js";
 import {
-  AVENGER_MOVE_MUST_CAPTURE,
   CASTLE_OPENING_SIDE_ANCHOR,
   EP_EXPIRES_AFTER_NEXT_PLAYERS_TURN,
   FIFTY_MOVE_INCREMENT_PER_OPENING_TURN,
@@ -108,13 +108,31 @@ export function epWindowIsOpen(state: BoardState, target: EpTarget): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Avenger eligibility for the piece ABOUT to move (§6.4, rulings R4a/R4b):
- * still unmoved on its original start square, and its team has suffered a
- * qualifying loss (a piece captured while unmoved on its own start square).
+ * Avenger eligibility (§6.4, ruled by Andrew 2026-07-18): the crossing move
+ * must CAPTURE the enemy standing on an unmoved teammate's grave. All three:
+ *   1. the avenger has never moved (still on its original start square);
+ *   2. the move captures;
+ *   3. the DESTINATION is the game-start square of an own-team piece that
+ *      never moved and is gone — i.e., it was captured in place.
+ * "Pieces in both the starting and ending positions have not moved."
+ * Stateless: with the destination held by an enemy, startPieceMoved false
+ * for it implies its game-start piece died on its home square. (Destination,
+ * not the capture square: §6.4 speaks of the ending position; the en passant
+ * split is moot — pawns are never primaries.)
  */
-function avengerEligible(state: BoardState, piece: Piece): boolean {
+function avengerEligible(
+  state: BoardState,
+  piece: Piece,
+  to: Square,
+  captures: Square | undefined,
+): boolean {
   if (piece.hasMoved || piece.promoted) return false;
-  return state.avengeableLoss[teamOf(piece.seat) - 1] ?? false;
+  if (captures === undefined) return false;
+  const fallenSeat = initialSeatOf(to);
+  if (fallenSeat === null || teamOf(fallenSeat) !== teamOf(piece.seat)) {
+    return false;
+  }
+  return !(state.startPieceMoved[to] ?? false);
 }
 
 interface EffectInput {
@@ -167,10 +185,7 @@ function computeEffects(input: EffectInput): {
   let evaporates = false;
   let avenger = false;
   if (crosses && isPrimary(piece.kind) && !piece.halo) {
-    const exempt =
-      avengerEligible(state, piece) &&
-      (!AVENGER_MOVE_MUST_CAPTURE || captures !== undefined);
-    if (exempt) {
+    if (avengerEligible(state, piece, input.to, captures)) {
       avenger = true;
     } else {
       evaporates = true;
@@ -664,21 +679,6 @@ export function applySubmove(
     }
   };
 
-  let avengeableLoss = state.avengeableLoss;
-  const recordLoss = (victim: Piece) => {
-    if (!victim.hasMoved && !victim.promoted) {
-      const idx = teamOf(victim.seat) - 1;
-      if (!avengeableLoss[idx]) {
-        const next: [boolean, boolean] = [...avengeableLoss] as [
-          boolean,
-          boolean,
-        ];
-        next[idx] = true;
-        avengeableLoss = next;
-      }
-    }
-  };
-
   const epCreated: EpTarget[] = [];
 
   if (move.castle) {
@@ -707,14 +707,13 @@ export function applySubmove(
       ...state,
       board,
       startPieceMoved,
-      avengeableLoss,
     };
   }
 
-  // Capture (including en passant, where victim ≠ destination)
+  // Capture (including en passant, where victim ≠ destination). A victim
+  // taken unmoved on its home square leaves a GRAVE readable later from
+  // startPieceMoved + the initial layout — no dedicated Avenger state.
   if (move.captures !== undefined) {
-    const victim = board[move.captures];
-    if (victim) recordLoss(victim);
     board[move.captures] = null;
   }
 
@@ -757,7 +756,6 @@ export function applySubmove(
     ...state,
     board,
     startPieceMoved,
-    avengeableLoss,
     epTargets: [...state.epTargets, ...epCreated],
   };
 }
@@ -1106,7 +1104,8 @@ export function positionKey(state: BoardState): string {
       }`,
     );
   }
-  // startPieceMoved bits affect R6 castling rights for vacated squares.
+  // startPieceMoved bits affect R6 castling rights for vacated squares and
+  // §6.4 Avenger graves.
   let moved = "";
   for (let sq = 0; sq < state.startPieceMoved.length; sq += 4) {
     let nibble = 0;
@@ -1122,6 +1121,5 @@ export function positionKey(state: BoardState): string {
     .sort()
     .join(",");
   parts.push(eps);
-  parts.push(state.avengeableLoss.map((b) => (b ? "1" : "0")).join(""));
   return parts.join("|");
 }

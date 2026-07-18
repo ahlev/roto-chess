@@ -53,13 +53,15 @@ export default function RulesPage() {
     () => demoState([{ at: "2B", kind: "N", seat: 1, halo: true, hasMoved: true, origin: "1C" }]),
     [],
   );
-  // §5.4 — an UNMOVED knight on its home square (1C), whose team has suffered
-  // a qualifying loss (avengeableLoss), crosses its own meridian PENALTY-FREE.
+  // §5.4 — an UNMOVED knight on its home square (1C) may capture the intruder
+  // standing on 31B — the grave of North's pawn, taken there before it ever
+  // moved — and cross its own meridian PENALTY-FREE.
   const avengerDemo = useMemo(
     () =>
-      demoState([{ at: "1C", kind: "N", seat: 1 }], 1, {
-        avengeableLoss: [true, false],
-      }),
+      demoState([
+        { at: "1C", kind: "N", seat: 1 },
+        { at: "31B", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
+      ]),
     [],
   );
   const castleDemo = useMemo(
@@ -296,9 +298,11 @@ export default function RulesPage() {
           </p>
           <p id="5.4">
             The <strong>Avenger</strong> exemption (§5.4): a primary piece
-            still on its original square may cross penalty-free to answer the
-            loss of a team piece that was itself taken on its original square.
-            Alert defense, rewarded.
+            that has never moved may cross its own meridian penalty-free when
+            the move <em>captures</em> an enemy standing on the starting
+            square of a team piece that was taken there before it ever moved.
+            Both sides of the revenge must be pristine — your avenger unmoved,
+            the fallen teammate unmoved. Alert defense, rewarded.
           </p>
           <div className="grid gap-6 md:grid-cols-2">
             <DemoBoard
@@ -312,7 +316,7 @@ export default function RulesPage() {
           </div>
           <DemoBoard
             state={avengerDemo}
-            caption="§5.4 — the Avenger: an unmoved knight, its team just wounded, crosses its own meridian and confirm shows it's penalty-free — it crosses and survives."
+            caption="§5.4 — the Avenger: an unmoved knight takes the intruder standing on its fallen pawn's home square; confirm shows the crossing is penalty-free — it captures and survives."
             className="mx-auto max-w-sm"
           />
         </Section>
