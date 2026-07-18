@@ -23,6 +23,7 @@ const CUE_TRIM: Record<CueName, number> = {
   capture: 1.0,
   "check-pulse": 1.0,
   halo: 0.85,
+  avenger: 0.9,
   victory: 0.9,
   draw: 0.85,
   "your-turn": 0.95,

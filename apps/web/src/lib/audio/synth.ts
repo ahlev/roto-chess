@@ -12,6 +12,7 @@ export type CueName =
   | "capture"
   | "check-pulse"
   | "halo"
+  | "avenger"
   | "victory"
   | "draw"
   | "your-turn"
@@ -161,6 +162,16 @@ const CUES: Record<CueName, () => Float32Array> = {
     bell(o, 587.33, 1); // D5, warm
     lowpass(o, 8000);
     return finish(o, 0.72);
+  },
+  avenger: () => {
+    // Revenge struck in meridian red: a firm low knock (the capture lands),
+    // then a dark-to-bright open fifth — D4 rising to A4 — tense, not sweet.
+    const o = buf(1.0);
+    woodKnock(o, 150, 0.9);
+    bell(o, 293.66, 0.85, 0.9, 0.05); // D4
+    bell(o, 440.0, 0.7, 0.9, 0.2); // A4
+    lowpass(o, 6500);
+    return finish(o, 0.78);
   },
   victory: () => {
     const o = buf(1.7);

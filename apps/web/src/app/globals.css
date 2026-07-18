@@ -395,3 +395,107 @@ body {
 .turn-arc {
   animation: turn-arc-in 400ms ease-out backwards;
 }
+
+/* ===========================================================================
+   APPENDED — event feedback (owned by components/board/RotoBoard.tsx and
+   components/game/EventCaptions.tsx): the Avenger moment, event captions,
+   and the in-app reduced-motion gate. Append-only block.
+=========================================================================== */
+
+/* The Avenger lands (§6.4): a double meridian-red shockwave rings the grave
+   square while a red trail draws along the crossing path, then everything
+   clears. One-shot; both animations end transparent. */
+@keyframes avenger-shockwave {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.55);
+  }
+  70% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+.avenger-shockwave {
+  animation: avenger-shockwave 750ms ease-out both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.avenger-shockwave-late {
+  animation-delay: 140ms;
+}
+/* pathLength=100 on the SVG path normalizes dash units, so one keyframe set
+   fits every crossing length: draw on over the first half, fade at the end. */
+@keyframes avenger-trail {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0.95;
+  }
+  45% {
+    stroke-dashoffset: 0;
+    opacity: 0.9;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+.avenger-trail {
+  stroke-dasharray: 100;
+  animation: avenger-trail 1100ms ease-out both;
+}
+
+/* Event captions: the one-line announcer under the status line — every
+   viewer learns WHY a piece survived, shone, or vanished. Fade in fast,
+   hold, fade away; the component unmounts the text at ~4.5s. */
+@keyframes event-caption-life {
+  0% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  5% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.event-caption {
+  animation: event-caption-life 4500ms ease-out both;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  padding: 0.2rem 0.8rem;
+  font-size: 0.8rem;
+  text-align: center;
+  background: var(--surface-raised);
+}
+.event-caption-halo {
+  color: var(--halo);
+  border-color: var(--halo);
+}
+.event-caption-evaporation {
+  color: var(--evaporate);
+  border-color: var(--evaporate);
+}
+.event-caption-avenger {
+  color: var(--north-red-bright);
+  border-color: var(--north-red-bright);
+}
+
+/* In-app "Reduce motion" (profiles.reduced_motion): the same collapse as
+   the OS media layer above, driven by a root attribute the authed app
+   layout sets. Either gate suffices on its own. */
+:root[data-reduced-motion="1"] *,
+:root[data-reduced-motion="1"] *::before,
+:root[data-reduced-motion="1"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

@@ -25,6 +25,8 @@ import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { NotationList } from "@/components/game/NotationList";
 import { ChatPanel, type ChatOpenRequest } from "@/components/game/ChatPanel";
 import { EndGameActions } from "@/components/game/EndGameActions";
+import { EventCaptions } from "@/components/game/EventCaptions";
+import { useTurnFeedback } from "@/components/game/useTurnFeedback";
 import { ObserverRail } from "@/components/game/ObserverRail";
 import { SeatPlaques } from "@/components/game/SeatPlaques";
 import { VictoryOverlay } from "@/components/game/VictoryOverlay";
@@ -54,6 +56,11 @@ export default function GameRoomPage({
   const [copied, setCopied] = useState(false);
   const [chatRequest, setChatRequest] = useState<ChatOpenRequest | null>(null);
   const replay = useReplayedTurns(game.gameId, game.turnsCount, game.lastMoveAt);
+
+  // Board effects + captions for the newest canonical turn — derived from
+  // the replayed record, so every seat AND every observer sees why a piece
+  // shone (halo), vanished (evaporation), or survived its crossing (Avenger).
+  const feedback = useTurnFeedback(replay.turns);
 
   const orientation: Seat = game.mySeat ?? 1;
   const openingStep =
@@ -319,6 +326,10 @@ export default function GameRoomPage({
         </div>
       )}
 
+      {/* The event announcer (halo / evaporation / Avenger), for players
+          and observers alike. */}
+      <EventCaptions captions={feedback.captions} />
+
       {!showHistory && game.displayState && (
         <>
           <RotoBoard
@@ -336,6 +347,11 @@ export default function GameRoomPage({
             }
             onSquareTap={game.tap}
             className="w-full"
+            bloomSquares={feedback.bloomSquares}
+            evaporateSquares={feedback.evaporateSquares}
+            evaporateGhosts={feedback.evaporateGhosts}
+            avengerSquares={feedback.avengerSquares}
+            avengerPaths={feedback.avengerPaths}
             // The crown ceremony (winner rotation, gold rim, losers dim) —
             // wired here so the online board reacts to a finish, not freezes.
             ceremonyWinner={

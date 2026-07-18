@@ -51,16 +51,23 @@ export function useGameSounds({
     let captured = false;
     let halo = false;
     let evaporated = false;
+    let avenger = false;
     for (const m of last.submoves) {
       if (m.captures != null) captured = true;
       if (m.evaporates) evaporated = true;
-      if (m.earnsHalo) halo = true;
+      // Mixed-signal rule (§6.3): a halo earned on an evaporating move is
+      // not celebrated — the evaporation owns the moment.
+      if (m.earnsHalo && !m.evaporates) halo = true;
+      if (m.avenger) avenger = true;
     }
     // Evaporation replaces the set-down (the piece never really lands);
     // otherwise a capture or an ordinary placement.
     if (evaporated) playCue("evaporation");
     else playCue(captured ? "capture" : "set-down");
-    if (halo) playCue("halo");
+    // The Avenger cue tells the whole revenge story (its capture earned a
+    // halo too — one fanfare, not two).
+    if (avenger) playCue("avenger");
+    else if (halo) playCue("halo");
     if (checkedRef.current) playCue("check-pulse");
   }, [turns, ready]);
 }

@@ -36,7 +36,6 @@ import {
   squareOf,
   type BoardState,
   type Move,
-  type Piece,
   type PieceKind,
   type Seat,
   type Square,
@@ -141,6 +140,16 @@ export interface RotoBoardProps {
   /** Squares where a piece just evaporated — it dissolves to ash, motes rise. */
   evaporateSquares?: readonly Square[];
   /**
+   * The evaporated MOVER's sprite per square. When provided, the dissolve
+   * shows THIS piece — the prev-board fallback would show the capture
+   * victim on an evaporating capture (§6.3: the mover is the one claimed).
+   */
+  evaporateGhosts?: readonly { square: Square; kind: PieceKind; seat: Seat }[];
+  /** Grave squares where an Avenger landed (§6.4) — meridian-red shockwave. */
+  avengerSquares?: readonly Square[];
+  /** Full crossing path per Avenger move, from-square first — red trail. */
+  avengerPaths?: readonly (readonly Square[])[];
+  /**
    * The crown is taken: the board's ONE slow rotation brings the winning
    * team's quadrants to the vertical axis; everything else dims; a gold arc
    * inscribes the rim.
@@ -169,6 +178,9 @@ export function RotoBoard({
   ceremony = false,
   bloomSquares = [],
   evaporateSquares = [],
+  evaporateGhosts = [],
+  avengerSquares = [],
+  avengerPaths = [],
   ceremonyWinner = null,
   grow = true,
 }: RotoBoardProps) {
@@ -593,7 +605,7 @@ export function RotoBoard({
   // `evaporateSquares` arrives, so remember the previous board and keep the
   // piece rendered for its ~550ms dissolve toward ash.
   const [ghosts, setGhosts] = useState<
-    ReadonlyArray<{ square: Square; piece: Piece }>
+    ReadonlyArray<{ square: Square; kind: PieceKind; seat: Seat }>
   >([]);
   const prevBoardRef = useRef(state.board);
   const ghostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -607,16 +619,22 @@ export function RotoBoard({
       setGhosts([]);
       return;
     }
-    const resolved: Array<{ square: Square; piece: Piece }> = [];
+    const resolved: Array<{ square: Square; kind: PieceKind; seat: Seat }> = [];
     for (const sq of evaporateSquares) {
-      const piece = state.board[sq] ?? prevBoardRef.current[sq];
-      if (piece) resolved.push({ square: sq, piece });
+      // Caller-provided mover sprite first; else the board (or the
+      // remembered previous board) — which on an evaporating capture holds
+      // the victim, the best available fallback.
+      const given = evaporateGhosts.find((g) => g.square === sq);
+      const piece = given ?? state.board[sq] ?? prevBoardRef.current[sq];
+      if (piece) {
+        resolved.push({ square: sq, kind: piece.kind, seat: piece.seat });
+      }
     }
     setGhosts(resolved);
     // Removal timing only: with reduced motion the CSS collapses the fade to
     // an instant, so nothing visible lingers during this window.
     ghostTimerRef.current = setTimeout(() => setGhosts([]), 600);
-  }, [evapKey, evaporateSquares, state]);
+  }, [evapKey, evaporateSquares, evaporateGhosts, state]);
   useEffect(() => {
     prevBoardRef.current = state.board;
   }, [state]);
@@ -988,7 +1006,7 @@ export function RotoBoard({
             />
           )}
           {/* Evaporation: the doomed piece dissolves toward ash (~550ms)… */}
-          {ghosts.map(({ square: sq, piece }) => {
+          {ghosts.map(({ square: sq, kind, seat }) => {
             const g = SQUARES[sq];
             if (!g || state.board[sq]) return null;
             return (
@@ -999,7 +1017,7 @@ export function RotoBoard({
                 pointerEvents="none"
               >
                 <image
-                  href={`/pieces/${piece.seat}${piece.kind}.svg`}
+                  href={`/pieces/${seat}${kind}.svg`}
                   x={g.cx - PIECE_SIZE / 2}
                   y={g.cy - PIECE_SIZE / 2}
                   width={PIECE_SIZE}
@@ -1036,6 +1054,47 @@ export function RotoBoard({
                     style={{ animationDelay: `${120 + ((i * 3) % 5) * 55}ms` }}
                   />
                 ))}
+              </g>
+            );
+          })}
+          {/* The Avenger lands (§6.4): a meridian-red trail draws along the
+              crossing path while a double shockwave rings the grave square —
+              revenge, visible to every viewer. One-shot; ends transparent. */}
+          {avengerSquares.map((sq, i) => {
+            const g = SQUARES[sq];
+            if (!g) return null;
+            const trail = avengerPaths[i];
+            return (
+              <g key={`avenger-${sq}`} pointerEvents="none">
+                {trail && trail.length > 1 && (
+                  <path
+                    d={movePathD(trail[0] as Square, trail.slice(1))}
+                    fill="none"
+                    stroke="var(--north-red-bright)"
+                    strokeWidth={3.5}
+                    strokeLinecap="round"
+                    pathLength={100}
+                    className="avenger-trail"
+                  />
+                )}
+                <circle
+                  cx={g.cx}
+                  cy={g.cy}
+                  r={PIECE_SIZE / 2}
+                  fill="none"
+                  stroke="var(--north-red-bright)"
+                  strokeWidth={3}
+                  className="avenger-shockwave"
+                />
+                <circle
+                  cx={g.cx}
+                  cy={g.cy}
+                  r={PIECE_SIZE / 2}
+                  fill="none"
+                  stroke="var(--north-red-bright)"
+                  strokeWidth={2}
+                  className="avenger-shockwave avenger-shockwave-late"
+                />
               </g>
             );
           })}

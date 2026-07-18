@@ -14,6 +14,8 @@ import { SiteHeader } from "@/components/brand/SiteHeader";
 import { CapturesTray } from "@/components/game/CapturesTray";
 import { ConfirmBar } from "@/components/game/ConfirmBar";
 import { CoachNotes } from "@/components/game/CoachNotes";
+import { EventCaptions } from "@/components/game/EventCaptions";
+import { useTurnFeedback } from "@/components/game/useTurnFeedback";
 import { SeatPlaques, type PlaqueSeat } from "@/components/game/SeatPlaques";
 import { NotationList } from "@/components/game/NotationList";
 import { VictoryOverlay } from "@/components/game/VictoryOverlay";
@@ -30,15 +32,6 @@ const SEAT_NAME: Record<Seat, string> = {
   4: "West",
 };
 
-const PIECE_NAME: Record<string, string> = {
-  P: "pawn",
-  N: "knight",
-  B: "bishop",
-  R: "rook",
-  Q: "queen",
-  K: "king",
-};
-
 export default function HotseatPage() {
   const game = useHotseatGame();
   const [rotateToActive, setRotateToActive] = useState(true);
@@ -53,13 +46,18 @@ export default function HotseatPage() {
     [game.turns],
   );
 
-  // Move / capture / halo / evaporation / check cues, fired as turns commit.
+  // Move / capture / halo / evaporation / avenger / check cues, fired as
+  // turns commit.
   useGameSounds({
     turns: game.turns,
     checkedNow:
       game.status.kind === "active" && game.status.inCheck.length > 0,
     staged: game.stagedFirst !== null,
   });
+
+  // Board effects + captions for the newest turn — every viewer sees WHY a
+  // piece shone, vanished, or survived its crossing.
+  const feedback = useTurnFeedback(game.turns);
 
   // Turn indicator, matched to the online room: the four seats as plaques with
   // the live seat's partnership lit. Single-player twist — the "you" badge
@@ -104,21 +102,6 @@ export default function HotseatPage() {
     const step = openingStep ? ` — move ${openingStep} of 2` : "";
     return `${SEAT_NAME[seat]} to move${step}${checks}`;
   }, [game.state.activeSeat, game.status, openingStep]);
-
-  // The halo fires AFTER the turn passes, so the note must name whose piece
-  // earned it — the player reading it is already the NEXT one.
-  const haloNote = useMemo(() => {
-    const events = game.lastEvents;
-    const seat = game.lastEventsSeat;
-    if (!events || seat === null || events.halosEarned.length === 0) {
-      return null;
-    }
-    const square = events.halosEarned[0];
-    const kind = square === undefined ? undefined : game.state.board[square]?.kind;
-    const piece = (kind && PIECE_NAME[kind]) || "piece";
-    const who = SEAT_NAME[seat];
-    return `${who}'s ${piece} has earned its halo — it may now cross ${who}'s meridian freely, forever.`;
-  }, [game.lastEvents, game.lastEventsSeat, game.state.board]);
 
   // The clever context spoken by the victory card — recomputed from the
   // status + full turn list only once the game is no longer active.
@@ -240,13 +223,13 @@ export default function HotseatPage() {
               ),
             text: "Your partner is in check. You're not required to help (§6.2) — but you're allowed to. Sometimes the best help is a counterattack.",
           },
-          {
-            key: "halo",
-            active: haloNote !== null,
-            text: haloNote ?? "",
-          },
         ]}
       />
+
+      {/* The repeatable event announcer (halo / evaporation / Avenger) —
+          replaces the old once-ever halo coach note, which also mis-fired
+          on evaporating captures. */}
+      <EventCaptions captions={feedback.captions} />
 
       {!showHistory && (
         <>
@@ -262,8 +245,11 @@ export default function HotseatPage() {
             onSquareTap={game.tap}
             className="w-full"
             ceremony={game.turns.length === 0}
-            bloomSquares={game.lastEvents?.halosEarned ?? []}
-            evaporateSquares={game.lastEvents?.evaporations ?? []}
+            bloomSquares={feedback.bloomSquares}
+            evaporateSquares={feedback.evaporateSquares}
+            evaporateGhosts={feedback.evaporateGhosts}
+            avengerSquares={feedback.avengerSquares}
+            avengerPaths={feedback.avengerPaths}
             ceremonyWinner={
               game.status.kind === "checkmate" ? game.status.winningTeam : null
             }

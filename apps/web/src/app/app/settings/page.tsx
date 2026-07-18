@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { browserClient } from "@/lib/supabase/client";
 import { SiteHeader } from "@/components/brand/SiteHeader";
+import { applyReducedMotion } from "@/components/prefs/ReducedMotionGate";
 
 interface Prefs {
   display_name: string;
@@ -100,7 +101,10 @@ export default function SettingsPage() {
         <Toggle
           label="Reduce motion"
           checked={prefs.reduced_motion}
-          onChange={(v) => void save({ ...prefs, reduced_motion: v })}
+          onChange={(v) => {
+            applyReducedMotion(v); // live — no reload needed
+            void save({ ...prefs, reduced_motion: v });
+          }}
         />
         <Toggle
           label="Coach notes (first-time rule hints)"
