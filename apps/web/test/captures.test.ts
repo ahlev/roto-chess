@@ -83,6 +83,7 @@ function buildState(spec: Spec): BoardState {
     ply: spec.ply ?? 20,
     startPieceMoved,
     epTargets: spec.epTargets ?? [],
+    avengeWindows: [],
     halfmoveClock: 0,
     repetition: {},
   };

@@ -318,15 +318,19 @@ function toNaiveMoves(
       let avenger = false;
       if (crossed && PRIMARY.has(piece.kind) && !piece.halo) {
         // §6.4 (ruled 2026-07-18): capture the intruder standing where an
-        // own-team piece started, never moved, and is gone — died in place.
+        // own-team piece started, never moved, and is gone — died in place —
+        // and (window ruling 2026-10-08) only on the victim's own next turn,
+        // so the grave must be the MOVER's, with its window still open.
         const graveSeat = homeSeatOfRank(rk(w.to));
         const eligible =
           !piece.hasMoved &&
           !piece.promoted &&
           w.captures !== null &&
-          graveSeat !== null &&
-          team(graveSeat) === team(piece.seat) &&
-          !(state.startPieceMoved[w.to] ?? false);
+          graveSeat === piece.seat &&
+          !(state.startPieceMoved[w.to] ?? false) &&
+          state.avengeWindows.some(
+            (aw) => aw.square === w.to && aw.victimSeat === piece.seat,
+          );
         if (eligible) avenger = true;
         else evaporates = true;
       }

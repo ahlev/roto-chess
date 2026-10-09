@@ -263,6 +263,7 @@ describe("avenger × opening (§6.4 × §4.2)", () => {
       ],
       activeSeat: 1,
       ply: 8,
+      avengeWindows: [{ square: "31B", victimSeat: 1 }], // seat 1's next turn
     });
     const first = mv(state, "1C", "31B"); // captures across the meridian
     expect(first.avenger).toBe(true);

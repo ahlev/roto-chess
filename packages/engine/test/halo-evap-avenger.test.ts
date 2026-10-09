@@ -3,7 +3,9 @@
  * the evaporation ordering trap (§6.3), and the Avenger rule (§6.4, R4).
  */
 import { describe, expect, it } from "vitest";
-import { parseSquare } from "../src/geometry.js";
+import { parseSquare, seatSetup, squareOf, type Square } from "../src/geometry.js";
+import { legalMovesFrom, legalSecondSubmoves, positionKey } from "../src/legal.js";
+import { deserializeState, serializeState } from "../src/state.js";
 import { buildState, mv, applyOk, at } from "./helpers.js";
 
 describe("the evaporation ordering trap (§6.3)", () => {
@@ -58,18 +60,18 @@ describe("the evaporation ordering trap (§6.3)", () => {
   });
 });
 
-describe("the Avenger rule (§6.4, ruled 2026-07-18)", () => {
+describe("the Avenger rule (§6.4, R4 + window ruling 2026-10-08)", () => {
   /**
    * Grave-capture fixture. Seat 1's knight sits unmoved on its home square
-   * 1C. 31B is the home square of a seat-1 pawn; with startPieceMoved[31B]
-   * false and the pawn absent from the board, that pawn was captured there
-   * before it ever moved — an unmoved teammate's grave. An enemy knight
-   * (the intruder) stands on it.
+   * 1C. 31B is the home square of a seat-1 pawn that was captured there
+   * before it ever moved — an unmoved teammate's grave — and an enemy knight
+   * (the intruder) stands on it. By default it is seat 1's first turn since
+   * that loss, so the Avenger window is open.
    */
   function graveState(opts?: {
     knightMoved?: boolean;
-    pawnHadMoved?: boolean;
     intruder?: boolean;
+    windowOpen?: boolean;
   }) {
     return buildState({
       pieces: [
@@ -87,11 +89,12 @@ describe("the Avenger rule (§6.4, ruled 2026-07-18)", () => {
           : []),
       ],
       activeSeat: 1,
-      startMoved: opts?.pawnHadMoved ? ["31B"] : [],
+      avengeWindows:
+        (opts?.windowOpen ?? true) ? [{ square: "31B", victimSeat: 1 }] : [],
     });
   }
 
-  it("an unmoved primary capturing the intruder on an unmoved teammate's grave crosses penalty-free", () => {
+  it("an unmoved primary capturing the intruder on its grave, on the victim's next turn, crosses penalty-free", () => {
     const state = graveState();
     const move = mv(state, "1C", "31B"); // jumps across the north meridian
     expect(move.captures).toBe(parseSquare("31B"));
@@ -104,10 +107,8 @@ describe("the Avenger rule (§6.4, ruled 2026-07-18)", () => {
     expect(events.avengerMoves).toEqual([parseSquare("31B")]);
   });
 
-  it("no exemption when the grave's own piece had MOVED before it was lost (the 2HPMK case)", () => {
-    // The pawn that started on 31B left its square earlier; whatever the
-    // intruder took there, it was not an unmoved piece on its home square.
-    const state = graveState({ pawnHadMoved: true });
+  it("no exemption once the window has closed — avenging in a later round evaporates", () => {
+    const state = graveState({ windowOpen: false });
     const move = mv(state, "1C", "31B");
     expect(move.captures).toBe(parseSquare("31B"));
     expect(move.avenger).toBeUndefined();
@@ -118,22 +119,21 @@ describe("the Avenger rule (§6.4, ruled 2026-07-18)", () => {
   });
 
   it("a quiet crossing is never an Avenger move — avenging requires the capture", () => {
-    const state = graveState({ intruder: false }); // 31B is a grave, but empty
+    const state = graveState({ intruder: false }); // window open, grave empty
     const move = mv(state, "1C", "31B");
     expect(move.captures).toBeUndefined();
     expect(move.avenger).toBeUndefined();
     expect(move.evaporates).toBe(true);
   });
 
-  it("capturing across the meridian on a square holding no fallen teammate evaporates", () => {
-    // Rank 30 carries no game-start piece: no grave there, regardless of
-    // what the team has lost elsewhere.
+  it("capturing across the meridian on a square with no open window evaporates", () => {
     const state = buildState({
       pieces: [
         { at: "1A", kind: "R", seat: 1 },
         { at: "30A", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
       ],
       activeSeat: 1,
+      avengeWindows: [{ square: "31B", victimSeat: 1 }], // a different grave
     });
     const move = mv(state, "1A", "30A", { rotDir: -1 });
     expect(move.captures).toBe(parseSquare("30A"));
@@ -141,20 +141,21 @@ describe("the Avenger rule (§6.4, ruled 2026-07-18)", () => {
     expect(move.evaporates).toBe(true);
   });
 
-  it("an unmoved PARTNER-seat piece's grave qualifies (own team's pieces, §6.4)", () => {
+  it("a PARTNER cannot avenge — the window belongs to the victim's own turn", () => {
     // 17A is seat 3's rook home; that rook died unmoved; a seat-4 intruder
-    // now stands on it. Seat 1 avenges its partner.
+    // stands on it. Even with seat 3's window open, seat 1 is not the victim.
     const state = buildState({
       pieces: [
         { at: "1A", kind: "R", seat: 1 },
         { at: "17A", kind: "R", seat: 4, hasMoved: true, origin: "24A" },
       ],
       activeSeat: 1,
+      avengeWindows: [{ square: "17A", victimSeat: 3 }],
     });
     const move = mv(state, "1A", "17A", { rotDir: -1 });
     expect(move.captures).toBe(parseSquare("17A"));
-    expect(move.avenger).toBe(true);
-    expect(move.evaporates).toBeUndefined();
+    expect(move.avenger).toBeUndefined();
+    expect(move.evaporates).toBe(true);
   });
 
   it("no exemption once the avenging piece has itself moved (§6.4 condition 1)", () => {
@@ -163,4 +164,118 @@ describe("the Avenger rule (§6.4, ruled 2026-07-18)", () => {
     expect(move.avenger).toBeUndefined();
     expect(move.evaporates).toBe(true);
   });
+
+  describe("window lifecycle", () => {
+    /** Seat 4's haloed knight on 29C can take seat 1's unmoved pawn on 31D. */
+    function seat4ToMove() {
+      return buildState({
+        pieces: [
+          { at: "1C", kind: "N", seat: 1 },
+          { at: "31D", kind: "P", seat: 1 },
+          { at: "29C", kind: "N", seat: 4, halo: true, origin: "25C" },
+        ],
+        activeSeat: 4,
+      });
+    }
+
+    it("capturing an unmoved piece on its home square opens a window for its owner", () => {
+      const start = seat4ToMove();
+      const { state } = applyOk(start, [mv(start, "29C", "31D")]);
+      expect(state.activeSeat).toBe(1);
+      expect(state.avengeWindows).toEqual([
+        { square: parseSquare("31D"), victimSeat: 1 },
+      ]);
+      // …and the victim avenges on that very turn.
+      const avenge = mv(state, "1C", "31D");
+      expect(avenge.avenger).toBe(true);
+      expect(avenge.evaporates).toBeUndefined();
+    });
+
+    it("the window closes at the end of the victim's turn, used or not", () => {
+      const start = seat4ToMove();
+      const { state: s1 } = applyOk(start, [mv(start, "29C", "31D")]);
+      const kingMove = legalMovesFrom(s1, kingHome(1))[0];
+      expect(kingMove).toBeDefined();
+      const { state: s2 } = applyOk(s1, [kingMove!]);
+      expect(s2.avengeWindows).toEqual([]);
+    });
+
+    it("capturing a piece that had moved opens no window (the 2HPMK case)", () => {
+      const state = buildState({
+        pieces: [
+          { at: "31D", kind: "P", seat: 1, hasMoved: true, origin: "31C" },
+          { at: "29C", kind: "N", seat: 4, halo: true, origin: "25C" },
+        ],
+        activeSeat: 4,
+      });
+      const { state: after } = applyOk(state, [mv(state, "29C", "31D")]);
+      expect(after.avengeWindows).toEqual([]);
+    });
+
+    it("a loss to seat 2 stays avengeable through seats 3 and 4, then on seat 1's turn", () => {
+      // Seat 2's haloed rook takes seat 1's unmoved pawn on 2A.
+      let state = buildState({
+        pieces: [
+          { at: "32A", kind: "R", seat: 1 },
+          { at: "2A", kind: "P", seat: 1 },
+          { at: "5A", kind: "R", seat: 2, halo: true, origin: "9A" },
+        ],
+        activeSeat: 2,
+      });
+      state = applyOk(state, [mv(state, "5A", "2A")]).state;
+      for (const seat of [3, 4] as const) {
+        expect(state.activeSeat).toBe(seat);
+        const k = legalMovesFrom(state, kingHome(seat))[0];
+        expect(k).toBeDefined();
+        state = applyOk(state, [k!]).state;
+        expect(state.avengeWindows).toEqual([
+          { square: parseSquare("2A"), victimSeat: 1 },
+        ]);
+      }
+      expect(state.activeSeat).toBe(1);
+      const avenge = mv(state, "32A", "2A", { rotDir: 1 });
+      expect(avenge.avenger).toBe(true);
+      expect(avenge.evaporates).toBeUndefined();
+    });
+
+    it("an opening double-move turn sees the window on its second submove", () => {
+      const state = buildState({
+        pieces: [
+          { at: "1C", kind: "N", seat: 1 },
+          { at: "32A", kind: "R", seat: 1 },
+          { at: "31D", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
+        ],
+        activeSeat: 1,
+        ply: 4,
+        avengeWindows: [{ square: "31D", victimSeat: 1 }],
+      });
+      const first = legalMovesFrom(state, parseSquare("32A")).find(
+        (m) => m.to === parseSquare("31A"),
+      );
+      expect(first).toBeDefined();
+      const second = legalSecondSubmoves(state, first!).find(
+        (m) => m.from === parseSquare("1C") && m.to === parseSquare("31D"),
+      );
+      expect(second?.avenger).toBe(true);
+      const { state: after } = applyOk(state, [first!, second!]);
+      expect(after.avengeWindows).toEqual([]);
+    });
+  });
+
+  it("an older snapshot without avengeWindows loads with none open", () => {
+    const raw = JSON.parse(serializeState(graveState())) as Record<string, unknown>;
+    delete raw.avengeWindows;
+    expect(deserializeState(JSON.stringify(raw)).avengeWindows).toEqual([]);
+  });
+
+  it("open windows are part of the repetition position key", () => {
+    expect(positionKey(graveState())).not.toBe(
+      positionKey(graveState({ windowOpen: false })),
+    );
+  });
 });
+
+/** A seat's king home square (where buildState auto-places it). */
+function kingHome(seat: 1 | 2 | 3 | 4): Square {
+  return squareOf(seatSetup(seat).kingBack, 3);
+}

@@ -43,6 +43,8 @@ export interface StateSpec {
   halfmoveClock?: number;
   /** Extra squares (display coords) whose game-start piece has moved away. */
   startMoved?: string[];
+  /** Open §6.4 Avenger windows: grave (display coord) + the seat that lost it. */
+  avengeWindows?: { square: string; victimSeat: Seat }[];
   /** Suppress auto-kings (only for tests that place all kings themselves). */
   noAutoKings?: boolean;
 }
@@ -103,6 +105,10 @@ export function buildState(spec: StateSpec): BoardState {
     ply: spec.ply ?? 20,
     startPieceMoved,
     epTargets: spec.epTargets ?? [],
+    avengeWindows: (spec.avengeWindows ?? []).map((w) => ({
+      square: parseSquare(w.square),
+      victimSeat: w.victimSeat,
+    })),
     halfmoveClock: spec.halfmoveClock ?? 0,
     repetition: {},
   };

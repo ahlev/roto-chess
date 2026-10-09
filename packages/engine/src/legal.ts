@@ -33,12 +33,12 @@ import {
   wrapRank,
 } from "./geometry.js";
 import {
+  type AvengeWindow,
   type BoardState,
   type EpTarget,
   type Piece,
   STATE_SCHEMA_VERSION,
   inOpening,
-  initialSeatOf,
   isPrimary,
 } from "./state.js";
 import {
@@ -108,17 +108,18 @@ export function epWindowIsOpen(state: BoardState, target: EpTarget): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Avenger eligibility (§6.4, ruled by Andrew 2026-07-18): the crossing move
- * must CAPTURE the enemy standing on an unmoved teammate's grave. All three:
+ * Avenger eligibility (§6.4; R4 ruled by Andrew 2026-07-18, window ruled by
+ * the founder 2026-10-08). All four:
  *   1. the avenger has never moved (still on its original start square);
  *   2. the move captures;
- *   3. the DESTINATION is the game-start square of an own-team piece that
- *      never moved and is gone — i.e., it was captured in place.
- * "Pieces in both the starting and ending positions have not moved."
- * Stateless: with the destination held by an enemy, startPieceMoved false
- * for it implies its game-start piece died on its home square. (Destination,
- * not the capture square: §6.4 speaks of the ending position; the en passant
- * split is moot — pawns are never primaries.)
+ *   3. the DESTINATION is the grave of a piece captured on its home square
+ *      before it ever moved ("pieces in both the starting and ending
+ *      positions have not moved");
+ *   4. it is that piece's owner's first turn since the loss — the mover's
+ *      own window, so a partner can never avenge on the victim's behalf.
+ * Conditions 3 and 4 are one lookup: applySubmove opens a window only for
+ * an unmoved piece taken on its home square, and applyTurn closes it after
+ * the victim's turn.
  */
 function avengerEligible(
   state: BoardState,
@@ -128,11 +129,9 @@ function avengerEligible(
 ): boolean {
   if (piece.hasMoved || piece.promoted) return false;
   if (captures === undefined) return false;
-  const fallenSeat = initialSeatOf(to);
-  if (fallenSeat === null || teamOf(fallenSeat) !== teamOf(piece.seat)) {
-    return false;
-  }
-  return !(state.startPieceMoved[to] ?? false);
+  return state.avengeWindows.some(
+    (w) => w.square === to && w.victimSeat === piece.seat,
+  );
 }
 
 interface EffectInput {
@@ -711,9 +710,17 @@ export function applySubmove(
   }
 
   // Capture (including en passant, where victim ≠ destination). A victim
-  // taken unmoved on its home square leaves a GRAVE readable later from
-  // startPieceMoved + the initial layout — no dedicated Avenger state.
+  // taken unmoved on its home square leaves a GRAVE: open its owner's
+  // Avenger window (§6.4). En passant victims have always moved.
+  const windowsOpened: AvengeWindow[] = [];
   if (move.captures !== undefined) {
+    const victim = board[move.captures];
+    if (
+      victim && !victim.hasMoved && !victim.promoted &&
+      victim.origin === move.captures
+    ) {
+      windowsOpened.push({ square: move.captures, victimSeat: victim.seat });
+    }
     board[move.captures] = null;
   }
 
@@ -757,6 +764,7 @@ export function applySubmove(
     board,
     startPieceMoved,
     epTargets: [...state.epTargets, ...epCreated],
+    avengeWindows: [...state.avengeWindows, ...windowsOpened],
   };
 }
 
@@ -1009,10 +1017,16 @@ export function applyTurn(state: BoardState, turn: Turn): ApplyTurnResult {
   }
 
   // Turn bookkeeping: EP windows (R5 — only windows created THIS turn
-  // survive), fifty-move clock (§8.6, one player-turn), repetition (§8.5).
+  // survive), Avenger windows (§6.4 — the mover's close, used or not; a
+  // seat never loses a piece by capture on its own turn, so windows opened
+  // this turn all belong to others), fifty-move clock (§8.6, one
+  // player-turn), repetition (§8.5).
   const newPly = state.ply + 1;
   const epTargets = working.epTargets.filter(
     (t) => t.createdAtPly === state.ply,
+  );
+  const avengeWindows = working.avengeWindows.filter(
+    (w) => w.victimSeat !== seat,
   );
   const zeroing = events.pawnMoved || events.captures > 0;
   const halfmoveClock = zeroing
@@ -1025,6 +1039,7 @@ export function applyTurn(state: BoardState, turn: Turn): ApplyTurnResult {
     activeSeat: nextSeat(seat),
     ply: newPly,
     epTargets,
+    avengeWindows,
     halfmoveClock,
     repetition: state.repetition, // placeholder; keyed below
   };
@@ -1104,8 +1119,7 @@ export function positionKey(state: BoardState): string {
       }`,
     );
   }
-  // startPieceMoved bits affect R6 castling rights for vacated squares and
-  // §6.4 Avenger graves.
+  // startPieceMoved bits affect R6 castling rights for vacated squares.
   let moved = "";
   for (let sq = 0; sq < state.startPieceMoved.length; sq += 4) {
     let nibble = 0;
@@ -1121,5 +1135,11 @@ export function positionKey(state: BoardState): string {
     .sort()
     .join(",");
   parts.push(eps);
+  // Open Avenger windows change which crossings evaporate (§6.4).
+  const avenges = state.avengeWindows
+    .map((w) => `${w.square}>${w.victimSeat}`)
+    .sort()
+    .join(",");
+  parts.push(avenges);
   return parts.join("|");
 }

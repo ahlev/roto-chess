@@ -34,10 +34,10 @@ export const CASTLE_OPENING_SIDE_ANCHOR: "king" | "queen" = "king";
  * R4 — RULED by Andrew 2026-07-18 (no longer an open ambiguity; the former
  * R4a/R4b flags are retired). An Avenger move must CAPTURE the enemy piece
  * standing on the grave of an own-team piece that was captured on its start
- * square before it ever moved. No time window exists because none is needed:
- * "recent" is encoded positionally — once the intruder leaves the grave,
- * there is nothing to avenge there. Encoded directly in avengerEligible
- * (legal.ts); see docs/RULINGS.md § R4 for the ruling record.
+ * square before it ever moved. AMENDED by the founder 2026-10-08: only on
+ * the victim's own next turn (BoardState.avengeWindows; a partner cannot
+ * avenge for them). Encoded in avengerEligible (legal.ts); see
+ * docs/RULINGS.md § R4 for the ruling record.
  */
 
 /**

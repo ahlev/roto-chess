@@ -21,7 +21,7 @@ import {
   squareOf,
 } from "./geometry.js";
 
-export const ENGINE_VERSION = "0.2.0";
+export const ENGINE_VERSION = "0.3.0";
 export const STATE_SCHEMA_VERSION = 1;
 
 export type PieceKind = "K" | "Q" | "R" | "B" | "N" | "P";
@@ -60,6 +60,18 @@ export interface EpTarget {
   readonly createdAtPly: number;
 }
 
+/**
+ * An open Avenger window (§6.4; window ruling 2026-10-08). Opened when a
+ * piece is captured on its home square before it ever moved; open only
+ * during the victim's own next turn, then closed whether used or not.
+ */
+export interface AvengeWindow {
+  /** The grave — the fallen piece's home square. */
+  readonly square: Square;
+  /** The seat that lost the piece — the only seat that may avenge it. */
+  readonly victimSeat: Seat;
+}
+
 export interface BoardState {
   schemaVersion: typeof STATE_SCHEMA_VERSION;
   /** 128 entries, rank-major (square id = index). */
@@ -86,6 +98,11 @@ export interface BoardState {
    * one turn. Cleared after the immediately-following player's turn (R5).
    */
   epTargets: readonly EpTarget[];
+  /**
+   * Open Avenger windows. An ARRAY because one opening double-move turn can
+   * create two graves. Closed at the end of the victim's next turn.
+   */
+  avengeWindows: readonly AvengeWindow[];
   /**
    * Fifty-move counter (§8.6): player-turns since the last pawn move or
    * capture. A double-move opening turn increments it by 1 (one turn).
@@ -150,21 +167,6 @@ export function initialBoard(): (Piece | null)[] {
   return board;
 }
 
-/**
- * Game-start occupant's seat, per square (null = empty at game start).
- * Powers the Avenger rule's ending-position condition (§6.4, ruled
- * 2026-07-18): a square is an own-team GRAVE when its game-start piece
- * belonged to the mover's team, never moved (startPieceMoved false), and is
- * gone from the square — i.e., it was captured in place.
- */
-const INITIAL_SEATS: readonly (Seat | null)[] = initialBoard().map(
-  (piece) => piece?.seat ?? null,
-);
-
-export function initialSeatOf(square: Square): Seat | null {
-  return INITIAL_SEATS[square] ?? null;
-}
-
 export function initialState(): BoardState {
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
@@ -173,6 +175,7 @@ export function initialState(): BoardState {
     ply: 0,
     startPieceMoved: new Array<boolean>(SQUARE_COUNT).fill(false),
     epTargets: [],
+    avengeWindows: [],
     halfmoveClock: 0,
     repetition: {},
   };
@@ -227,6 +230,23 @@ export function deserializeState(json: string): BoardState {
       !SEATS.includes(t.bySeat as Seat)
     ) {
       throw new Error("Invalid state: malformed epTarget");
+    }
+  }
+  // Snapshots from engine 0.2.0 predate Avenger windows: none open.
+  if ((state.avengeWindows as unknown) === undefined) {
+    state.avengeWindows = [];
+  }
+  if (!Array.isArray(state.avengeWindows)) {
+    throw new Error("Invalid state: avengeWindows must be an array");
+  }
+  for (const raw of state.avengeWindows as readonly unknown[]) {
+    const w = raw as Partial<AvengeWindow> | null;
+    if (
+      typeof w !== "object" || w === null ||
+      typeof w.square !== "number" ||
+      !SEATS.includes(w.victimSeat as Seat)
+    ) {
+      throw new Error("Invalid state: malformed avengeWindow");
     }
   }
   if (typeof state.ply !== "number" || state.ply < 0) {

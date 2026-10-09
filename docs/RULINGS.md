@@ -75,8 +75,28 @@ with an opening castle — a narrow, strategic nuance with no effect after round
 
 ## R4 — Avenger: how "recent," and must the avenging move capture?
 
-**Status: RULED by Andrew, 2026-07-18 — CHANGE.** The V1 assumption below is
-superseded; the corrected rule is implemented as of engine 0.2.0.
+**Status: RULED by Andrew, 2026-07-18 — CHANGE; AMENDED by the founder,
+2026-10-08 (time window — see below).** The V1 assumption below is superseded;
+the corrected rule is implemented as of engine 0.2.0, the window as of 0.3.0.
+
+**Amendment (2026-10-08): avenge on your very next turn, or never.** The
+founder ruled: *"avenging a lost piece must happen in the turn immediately
+following the loss of that piece. You cannot avenge in later rounds."* Asked
+whose turn that is — the next turn in seat order always belongs to the
+victim's TEAM, but often to the partner — the founder chose **the victim's own
+next turn**. So a fourth condition joins the three below:
+
+4. It is the fallen piece's owner's first turn since the loss. The window
+   closes when that turn ends, used or not, and a partner can never avenge on
+   the victim's behalf.
+
+This replaces the "no time window is needed" reading below. The engine now
+remembers graves: a capture of an unmoved piece on its home square opens
+`avengeWindows: {square, victimSeat}` in `BoardState`, and the victim's
+`applyTurn` closes it. Snapshots from engine 0.2.0 load with no windows open.
+The engine-generated goldens and synthetic archive corpus were regenerated:
+the old showcase game had an avenge a full round after the loss, which is now
+illegal.
 
 **The ruling.** "Avenging" links the crossing to the specific capture being
 made. In Andrew's words: *"the pieces in both the starting and ending positions
@@ -90,10 +110,11 @@ position."* Operationally, an Avenger move must satisfy all three:
    piece that was captured there before it ever moved — the enemy being taken
    is standing on an unmoved teammate's grave.
 
-Consequences of the positional reading: no time window is needed ("recent" is
-encoded by the position — once the intruder leaves the grave, there is nothing
-to avenge there); quiet crossings are never exempt; the exemption is per-move,
-not a standing team right, so no Avenger memory exists in game state.
+Consequences of the positional reading (as ruled 2026-07-18): no time window
+was needed ("recent" was encoded by the position — once the intruder leaves the
+grave, there is nothing to avenge there); quiet crossings are never exempt; the
+exemption is per-move, not a standing team right. *The time-window part is
+superseded by the 2026-10-08 amendment above.*
 
 **How this surfaced.** Archived game 2HPMK, ply 25 (`NC1xB31*^`): the engine's
 V1 interpretation exempted an unmoved knight because a team-wide flag had been
@@ -112,8 +133,9 @@ unmoved-piece loss anywhere, tracked in a sticky `avengeableLoss` state flag
 explicitly linked the avenged loss to the avenging move — which is why it was
 recorded here for ratification rather than silently assumed.
 
-**Code.** Encoded directly in `avengerEligible` (`packages/engine/src/legal.ts`)
-as a stateless check against `startPieceMoved` and the initial-occupant map.
+**Code.** `avengerEligible` (`packages/engine/src/legal.ts`) checks the unmoved
+avenger, the capture, and an open window for the destination owned by the
+mover's seat. `applySubmove` opens windows; `applyTurn` closes the mover's.
 The R4a/R4b constants in `rulings.ts` are retired.
 
 ---

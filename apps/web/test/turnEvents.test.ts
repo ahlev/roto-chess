@@ -33,6 +33,8 @@ interface Spec {
   }>;
   activeSeat?: Seat;
   ply?: number;
+  /** Open §6.4 windows: grave (display coord) + the seat that lost it. */
+  avengeWindows?: { square: string; victimSeat: Seat }[];
 }
 
 function buildState(spec: Spec): BoardState {
@@ -75,6 +77,10 @@ function buildState(spec: Spec): BoardState {
     ply: spec.ply ?? 20,
     startPieceMoved,
     epTargets: [],
+    avengeWindows: (spec.avengeWindows ?? []).map((w) => ({
+      square: parseSquare(w.square),
+      victimSeat: w.victimSeat,
+    })),
     halfmoveClock: 0,
     repetition: {},
   };
@@ -171,14 +177,16 @@ describe("turnFeedback — evaporation owns the moment (mixed-signal rule)", () 
 
 describe("turnFeedback — the Avenger moment", () => {
   it("marks the grave square, carries the crossing path, and captions the revenge", () => {
-    // §6.4 (ruled 2026-07-18): unmoved knight takes the intruder standing on
-    // its fallen pawn's home square, crossing penalty-free.
+    // §6.4: unmoved knight takes the intruder standing on its fallen pawn's
+    // home square — on North's first turn since the loss (window open) —
+    // crossing penalty-free.
     const state = buildState({
       pieces: [
         { at: "1C", kind: "N", seat: 1 },
         { at: "31B", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
       ],
       activeSeat: 1,
+      avengeWindows: [{ square: "31B", victimSeat: 1 }],
     });
     const move = findMove(state, "1C", "31B");
     expect(move.avenger).toBe(true);

@@ -26,11 +26,11 @@ function load(name: string) {
 describe("golden games", () => {
   it("the showcase game replays to checkmate with all five features", () => {
     const parsed = parseGame(load("golden-showcase.rpgn"));
-    expect(parsed.turns.length).toBe(189);
+    expect(parsed.turns.length).toBe(95);
     const fold = playGame(parsed.turns);
     expect(fold.finalStatus.kind).toBe("checkmate");
     if (fold.finalStatus.kind === "checkmate") {
-      expect(fold.finalStatus.matedSeat).toBe(2);
+      expect(fold.finalStatus.matedSeat).toBe(4);
     }
     // Feature census across the whole game:
     const features = {
@@ -49,12 +49,12 @@ describe("golden games", () => {
       halo: true, evaporation: true, castle: true, ep: true, promo: true,
     });
     // Lock the exact final position.
-    expect(positionKey(fold.finalState)).toMatchInlineSnapshot(`"1|2|3:K1|4:K2|33:Q3hp|43:P3|44:K3|90:K4|116:R1h|ff00004fbf0000efbf00006fef0000ef|"`);
+    expect(positionKey(fold.finalState)).toMatchInlineSnapshot(`"1|4|0:R1u|1:B1u|2:N1|3:K1|4:P1u|6:P1u|21:B3h|25:P2u|27:P2u|33:B2u|42:K2|57:P3u|59:P3u|63:K3|66:N3u|83:B3h|85:P4|89:R3h|93:K4|99:Q1hp|105:P1|ca00004f9f00004fbe0000cf8f0000ef||"`);
   });
 
   it("golden game 2 replays to checkmate", () => {
     const parsed = parseGame(load("golden-2.rpgn"));
-    expect(parsed.turns.length).toBe(145);
+    expect(parsed.turns.length).toBe(198);
     expect(evaluateStatus(parsed.finalState).kind).toBe("checkmate");
   });
 
@@ -68,14 +68,14 @@ describe("golden games", () => {
     expect(positionKey(legacy.finalState)).toBe(
       positionKey(current.finalState),
     );
-    expect(legacy.headers.result).toBe("13"); // "NS" normalized
+    expect(legacy.headers.result).toBe("24"); // "EW" normalized
     expect(legacy.headers.termination).toBe("checkmate"); // ResultReason alias
   });
 
   it("validateGameText flags a Result header the replay contradicts", () => {
     const text = load("golden-2.rpgn");
     expect(validateGameText(text).issues).toEqual([]);
-    const lied = text.replace(/\[Result "[^"]+"\]/u, '[Result "24"]');
+    const lied = text.replace(/\[Result "[^"]+"\]/u, '[Result "13"]');
     expect(lied).not.toBe(text);
     const issues = validateGameText(lied).issues;
     expect(issues.length).toBe(1);

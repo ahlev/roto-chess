@@ -27,7 +27,12 @@ interface Spec {
 export function demoState(
   pieces: Spec[],
   activeSeat: Seat = 1,
-  opts?: { ply?: number; startMoved?: string[] },
+  opts?: {
+    ply?: number;
+    startMoved?: string[];
+    /** Open §6.4 windows: grave (display coord) + the seat that lost it. */
+    avengeWindows?: { square: string; victimSeat: Seat }[];
+  },
 ): BoardState {
   const board: (Piece | null)[] = new Array<Piece | null>(SQUARE_COUNT).fill(
     null,
@@ -74,6 +79,10 @@ export function demoState(
     ply: opts?.ply ?? 20,
     startPieceMoved,
     epTargets: [],
+    avengeWindows: (opts?.avengeWindows ?? []).map((w) => ({
+      square: parseSquare(w.square),
+      victimSeat: w.victimSeat,
+    })),
     halfmoveClock: 0,
     repetition: {},
   };

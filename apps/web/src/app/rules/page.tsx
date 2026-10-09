@@ -55,13 +55,18 @@ export default function RulesPage() {
   );
   // §5.4 — an UNMOVED knight on its home square (1C) may capture the intruder
   // standing on 31B — the grave of North's pawn, taken there before it ever
-  // moved — and cross its own meridian PENALTY-FREE.
+  // moved — and cross its own meridian PENALTY-FREE. It is North's first
+  // turn since that loss, so the Avenger window is open.
   const avengerDemo = useMemo(
     () =>
-      demoState([
-        { at: "1C", kind: "N", seat: 1 },
-        { at: "31B", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
-      ]),
+      demoState(
+        [
+          { at: "1C", kind: "N", seat: 1 },
+          { at: "31B", kind: "N", seat: 2, hasMoved: true, origin: "9C" },
+        ],
+        1,
+        { avengeWindows: [{ square: "31B", victimSeat: 1 }] },
+      ),
     [],
   );
   const castleDemo = useMemo(
@@ -302,7 +307,10 @@ export default function RulesPage() {
             the move <em>captures</em> an enemy standing on the starting
             square of a team piece that was taken there before it ever moved.
             Both sides of the revenge must be pristine — your avenger unmoved,
-            the fallen teammate unmoved. Alert defense, rewarded.
+            the fallen piece unmoved. And revenge is immediate: you may avenge
+            only on <em>your own next turn</em> after losing the piece — wait
+            a round and the chance is gone, and your partner cannot avenge for
+            you. Alert defense, rewarded.
           </p>
           <div className="grid gap-6 md:grid-cols-2">
             <DemoBoard
