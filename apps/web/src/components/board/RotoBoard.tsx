@@ -27,7 +27,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import {
   FILE_COUNT,
-  SEAT_COMPASS,
   fileOf,
   formatSquare,
   isInCheck,
@@ -80,16 +79,31 @@ const KIND_NAME: Record<PieceKind, string> = {
   P: "pawn",
 };
 
+/**
+ * Last-move tile tint per seat. Red/Blue/Gold wash the tile in their own
+ * accent; Black's accent is a pale cream that vanishes on the board, so its
+ * tiles go onyx with a pale rim-glow instead (form + value, not hue alone).
+ */
+const SEAT_TILE: Record<Seat, { fill: string; glow: string }> = {
+  1: { fill: "var(--north-red-bright)", glow: "var(--north-red-bright)" },
+  2: { fill: "var(--east-black-strong)", glow: "#f6f0e6" },
+  3: { fill: "var(--south-blue-bright)", glow: "var(--south-blue-bright)" },
+  4: { fill: "var(--west-gold-bright)", glow: "var(--west-gold-bright)" },
+};
+
 const PIECE_SIZE = 34;
+
+const TURN_ORDER_LABELS: Record<Seat, string> = { 1: "1", 2: "2", 3: "3", 4: "4" };
 
 // --- Zoom viewport tuning -------------------------------------------------
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4.5;
-/** The +/- preset: frame the viewer's own quadrant, which always sits at
- *  6 o'clock (the board rotates so `orientation`'s meridian is at bottom).
- *  Focus low and centered; the scale shows board center → bottom rim. */
+/** The +/- preset: frame the viewer's own quadrant, wherever the board's
+ *  orientation puts it. The focus point sits this fraction of the board's
+ *  width out from the center along the viewer's meridian; the scale shows
+ *  board center → rim. */
 const QUADRANT_ZOOM = 2.2;
-const QUADRANT_FOCUS_Y = 0.72;
+const QUADRANT_FOCUS_OFFSET = 0.22;
 /** Pointer travel (client px) under this is a tap; over it, a drag/pan. */
 const TAP_SLOP_PX = 8;
 /** Two touch taps within this window + slop toggle zoom instead of selecting. */
@@ -117,6 +131,18 @@ export interface RotoBoardProps {
   state: BoardState;
   /** Board orientation: this seat's meridian sits at 6 o'clock. */
   orientation: Seat;
+  /**
+   * The VIEWER's seat — its meridian is drawn bold, the zoom preset frames
+   * its quadrant, and the keyboard cursor starts on its back rank. Defaults
+   * to `orientation` (the two only differ once the board is locked with
+   * the first player at the top, so a viewer's quadrant can sit anywhere).
+   */
+  homeSeat?: Seat | null;
+  /** Short label per seat for the turn-order dots (a player's initial).
+   *  Defaults to the turn order, 1–4. */
+  seatLabels?: Record<Seat, string>;
+  /** Show the round number in the centre of the ring (live games). */
+  showRound?: boolean;
   selected?: Square | null;
   /** Legal moves for the selection (engine-filtered). */
   legalTargets?: readonly Move[];
@@ -167,6 +193,9 @@ export interface RotoBoardProps {
 export function RotoBoard({
   state,
   orientation,
+  homeSeat,
+  seatLabels = TURN_ORDER_LABELS,
+  showRound = false,
   selected = null,
   legalTargets = [],
   pendingMove = null,
@@ -193,6 +222,7 @@ export function RotoBoard({
         ? 0
         : 90
       : rotationForSeat(orientation);
+  const home: Seat = homeSeat ?? orientation;
   const bloomSet = useMemo(() => new Set(bloomSquares), [bloomSquares]);
   const evaporateSet = useMemo(
     () => new Set(evaporateSquares),
@@ -224,21 +254,37 @@ export function RotoBoard({
   }, [legalTargets]);
   const lastMoveSet = useMemo(() => new Set(lastMove), [lastMove]);
 
-  // Per-seat "last move" tiles, minus whatever the freshest move already
-  // brightens — so the newest move pops and the other three read as a quieter,
-  // darker memory of the round. One entry per (square, seat) to darken.
+  // Per-seat "last move" tiles, washed in the mover's own colour with a soft
+  // glow. The square a piece LANDED on reads stronger than the one it left,
+  // and the single freshest turn (`lastMove`) is stronger again — so the
+  // newest move pops and the other three read as a quieter memory of the
+  // round. One entry per square; a landing outranks a departure.
   const priorTiles = useMemo(() => {
-    const seen = new Set<Square>();
-    const out: { square: Square; seat: Seat }[] = [];
+    const bySquare = new Map<
+      Square,
+      { square: Square; seat: Seat; landed: boolean; fresh: boolean }
+    >();
     for (const m of priorMoves) {
-      for (const sq of [m.from, m.to]) {
-        if (lastMoveSet.has(sq) || seen.has(sq)) continue;
-        seen.add(sq);
-        out.push({ square: sq, seat: m.seat });
+      for (const [sq, landed] of [
+        [m.from, false],
+        [m.to, true],
+      ] as const) {
+        const prev = bySquare.get(sq);
+        if (prev && (prev.landed || !landed)) continue;
+        bySquare.set(sq, {
+          square: sq,
+          seat: m.seat,
+          landed,
+          fresh: lastMoveSet.has(sq),
+        });
       }
     }
-    return out;
+    return [...bySquare.values()];
   }, [priorMoves, lastMoveSet]);
+  const priorSquareSet = useMemo(
+    () => new Set(priorTiles.map((t) => t.square)),
+    [priorTiles],
+  );
 
   const checkedKings = useMemo(() => {
     const out: Square[] = [];
@@ -340,18 +386,21 @@ export function RotoBoard({
 
   const resetZoom = useCallback(() => applyZoom(1, 0, 0), [applyZoom]);
 
-  // Preset: frame the viewer's own quadrant (6 o'clock). Centers the low,
-  // horizontally-centered focus point; applyZoom's pan-clamp keeps the board
+  // Preset: frame the viewer's own quadrant. Centers the focus point on
+  // the viewer's meridian; applyZoom's pan-clamp keeps the board
   // covering the viewport, so this never reveals empty space.
   const zoomToOwnQuadrant = useCallback(() => {
     const vp = viewportRef.current;
     if (!vp) return;
     const rect = vp.getBoundingClientRect();
     const s = QUADRANT_ZOOM;
-    const px = 0.5 * rect.width;
-    const py = QUADRANT_FOCUS_Y * rect.height;
+    // Where the viewer's meridian points on SCREEN (0° = up, clockwise).
+    const screenRad =
+      (((home - 1) * 90 + rotation) * Math.PI) / 180;
+    const px = (0.5 + QUADRANT_FOCUS_OFFSET * Math.sin(screenRad)) * rect.width;
+    const py = (0.5 - QUADRANT_FOCUS_OFFSET * Math.cos(screenRad)) * rect.height;
     applyZoom(s, rect.width / 2 - px * s, rect.height / 2 - py * s);
-  }, [applyZoom]);
+  }, [applyZoom, home, rotation]);
 
   // The +/- toggle: out to the full board if zoomed, in to your quadrant if not.
   const togglePreset = useCallback(() => {
@@ -535,7 +584,7 @@ export function RotoBoard({
       // Up = inward toward file A, Down = outward toward D, clamped —
       // matching screen direction in the viewer's own quadrant at 6 o'clock.
       const base =
-        cursor ?? selected ?? squareOf((orientation - 1) * 8, FILE_COUNT - 1);
+        cursor ?? selected ?? squareOf((home - 1) * 8, FILE_COUNT - 1);
       let rank = rankOf(base);
       let file = fileOf(base);
       if (cursor !== null) {
@@ -554,7 +603,7 @@ export function RotoBoard({
       cursor,
       selected,
       onSquareTap,
-      orientation,
+      home,
       describeSquare,
       resetZoom,
     ],
@@ -711,23 +760,52 @@ export function RotoBoard({
               strokeWidth={2}
             />
           )}
-          {/* Between-turns memory: each other seat's last move, darkened a
-              touch with a faint seat-colored edge so you can tell whose it is. */}
-          {priorTiles.map(({ square, seat }) =>
-            SQUARES[square] ? (
-              <path
-                key={`prior-${square}`}
-                d={SQUARES[square].path}
-                fill="#000"
-                fillOpacity={0.17}
-                stroke={SEAT_BRIGHT[seat]}
-                strokeOpacity={0.5}
-                strokeWidth={1.2}
-              />
-            ) : null,
-          )}
+          {/* Between-turns memory: each seat's last move, washed in that
+              seat's colour — a blurred rim for the soft glow, the tinted tile,
+              then a crisp edge. Landing squares and the freshest turn read
+              stronger; nothing animates, so it never competes with play. */}
+          <defs>
+            <filter
+              id="roto-tile-glow"
+              x="-40%"
+              y="-40%"
+              width="180%"
+              height="180%"
+            >
+              <feGaussianBlur stdDeviation="3.2" />
+            </filter>
+          </defs>
+          {priorTiles.map(({ square, seat, landed, fresh }) => {
+            const g = SQUARES[square];
+            if (!g) return null;
+            const tile = SEAT_TILE[seat];
+            const strength = (landed ? 1 : 0.55) * (fresh ? 1.25 : 1);
+            return (
+              <g key={`prior-${square}`} data-testid="last-move-tile">
+                <path
+                  d={g.path}
+                  fill="none"
+                  stroke={tile.glow}
+                  strokeWidth={5}
+                  strokeOpacity={Math.min(1, 0.6 * strength)}
+                  filter="url(#roto-tile-glow)"
+                />
+                <path
+                  d={g.path}
+                  fill={tile.fill}
+                  fillOpacity={Math.min(0.62, 0.42 * strength)}
+                  stroke={tile.glow}
+                  strokeOpacity={Math.min(1, 0.85 * strength)}
+                  strokeWidth={1.3}
+                />
+              </g>
+            );
+          })}
+          {/* A just-played move the seat memory does not cover yet (your own
+              move, before the canonical record catches up) keeps the neutral
+              tint so it is never left unmarked. */}
           {[...lastMoveSet].map((sq) =>
-            SQUARES[sq] ? (
+            SQUARES[sq] && !priorSquareSet.has(sq) ? (
               <path
                 key={`last-${sq}`}
                 d={SQUARES[sq].path}
@@ -746,7 +824,7 @@ export function RotoBoard({
               x2={m.x2}
               y2={m.y2}
               stroke="var(--board-meridian)"
-              strokeWidth={m.seat === orientation ? 4 : 2.5}
+              strokeWidth={m.seat === home ? 4 : 2.5}
               strokeLinecap="round"
               className={ceremony ? "ceremony-meridian" : undefined}
               style={ceremony ? { animationDelay: `${i * 80}ms` } : undefined}
@@ -862,6 +940,35 @@ export function RotoBoard({
                   </g>
                 );
               })()}
+              {/* Castling moves TWO pieces. The king's ghost above shows
+                  only half of it — ghost the partner piece too: kingside the
+                  rook steps to the bishop's file (§8.2.1); queenside the
+                  queen swaps onto the king's square. */}
+              {(() => {
+                if (!pendingMove.castle) return null;
+                const partner = state.board[pendingMove.to];
+                const partnerTo =
+                  pendingMove.castle === "kingside"
+                    ? pendingMove.path[pendingMove.path.length - 2]
+                    : pendingMove.from;
+                const g = partnerTo !== undefined ? SQUARES[partnerTo] : null;
+                if (!partner || !g) return null;
+                return (
+                  <g
+                    transform={`rotate(${-rotation} ${g.cx} ${g.cy})`}
+                    opacity={0.6}
+                    data-testid="castle-partner-ghost"
+                  >
+                    <image
+                      href={`/pieces/${partner.seat}${partner.kind}.svg`}
+                      x={g.cx - PIECE_SIZE / 2}
+                      y={g.cy - PIECE_SIZE / 2}
+                      width={PIECE_SIZE}
+                      height={PIECE_SIZE}
+                    />
+                  </g>
+                );
+              })()}
             </>
           )}
           {/* Destination markers — consequence-aware: an ash-teal dashed
@@ -931,6 +1038,14 @@ export function RotoBoard({
                 key={`p-${g.square}`}
                 transform={`rotate(${-rotation} ${g.cx} ${g.cy})`}
                 className={winnerDim ? "ceremony-dim" : undefined}
+                // A pending castle swaps two pieces: fade the real ones so
+                // the two ghosts (king + partner) read cleanly on top.
+                opacity={
+                  pendingMove?.castle &&
+                  (g.square === pendingMove.from || g.square === pendingMove.to)
+                    ? 0.18
+                    : undefined
+                }
               >
                 <g
                   className={ceremony ? "ceremony-piece" : undefined}
@@ -1192,11 +1307,40 @@ export function RotoBoard({
                 fill="var(--bg)"
                 style={{ fontFamily: "var(--font-plex-mono)" }}
               >
-                {SEAT_COMPASS[seat]}
+                {seatLabels[seat]}
               </text>
             </g>
           );
         })}
+        {/* Round number, dead centre of the ring (screen-fixed). A round is
+            one turn each for all four seats. */}
+        {showRound && ceremonyWinner === null && (
+          <g data-testid="round-number" pointerEvents="none">
+            <text
+              x={CENTER}
+              y={CENTER - 19}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={9}
+              letterSpacing={2}
+              fill="var(--text-dim)"
+              style={{ fontFamily: "var(--font-plex-mono)" }}
+            >
+              ROUND
+            </text>
+            <text
+              x={CENTER}
+              y={CENTER + 6}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={34}
+              fill="var(--text)"
+              style={{ fontFamily: "var(--font-instrument-serif)" }}
+            >
+              {Math.floor(state.ply / 4) + 1}
+            </text>
+          </g>
+        )}
       </svg>
         </div>
       </div>

@@ -2,9 +2,10 @@
 
 /**
  * Hotseat — a complete four-player local game on one screen, no backend.
- * The M4 gate: "is this Roto Chess?" Per-seat rotation follows the active
- * player (pass-and-play), rotation switches instantly (never animated
- * mid-game), and the opening's two-move staging is enforced in the UI.
+ * The M4 gate: "is this Roto Chess?" The board is LOCKED with the first
+ * player (Red) at the top; "rotate to player" is an opt-in for pass-and-play
+ * (it switches instantly, never animated mid-game). The opening's two-move
+ * staging is enforced in the UI.
  */
 
 import { useMemo, useState } from "react";
@@ -23,21 +24,24 @@ import { useHotseatGame } from "@/components/game/useHotseatGame";
 import { useGameSounds } from "@/lib/audio/useGameSounds";
 import { recentMovesBySeat } from "@/lib/game/recentMoves";
 import { victoryContext } from "@/lib/game/victory";
+import { CheckBanner } from "@/components/game/CheckBanner";
+import { RecentMovesStrip } from "@/components/game/RecentMovesStrip";
+import {
+  LOCKED_ORIENTATION,
+  SEAT_COLOR_NAME as SEAT_NAME,
+} from "@/lib/game/seatLabels";
 import { BRAND } from "@/config/brand";
 
-const SEAT_NAME: Record<Seat, string> = {
-  1: "North",
-  2: "East",
-  3: "South",
-  4: "West",
-};
+const nameOf = (seat: Seat) => SEAT_NAME[seat];
 
 export default function HotseatPage() {
   const game = useHotseatGame();
-  const [rotateToActive, setRotateToActive] = useState(true);
+  const [rotateToActive, setRotateToActive] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
-  const orientation: Seat = rotateToActive ? game.state.activeSeat : 1;
+  const orientation: Seat = rotateToActive
+    ? game.state.activeSeat
+    : LOCKED_ORIENTATION;
   const openingStep = game.opening ? (game.stagedFirst ? 2 : 1) : null;
 
   // Between-turns cue: darken each seat's most recent from/to tiles.
@@ -64,20 +68,9 @@ export default function HotseatPage() {
   // follows whoever is on the clock (the person holding the device IS them).
   const activeSeat = game.status.kind === "active" ? game.state.activeSeat : null;
   const seatPlaques: PlaqueSeat[] = useMemo(
-    () => SEATS.map((s) => ({ seat: s, userId: "", displayName: SEAT_NAME[s] })),
+    () => SEATS.map((s) => ({ seat: s, userId: "", displayName: `Player ${s}` })),
     [],
   );
-
-  // §6.3 out loud: a check on a NON-active player is not yet decided.
-  const checkNote = (() => {
-    const s = game.status;
-    if (s.kind !== "active" || s.inCheck.length === 0) return "";
-    const nonActive = s.inCheck.some((c) => c !== game.state.activeSeat);
-    const who = s.inCheck.map((c) => `${SEAT_NAME[c]} King`).join(" and the ");
-    return `Check on the ${who}${
-      nonActive ? " — not checkmate unless it stands on their turn" : ""
-    }.`;
-  })();
 
   const statusLine = useMemo(() => {
     const s = game.status;
@@ -184,14 +177,21 @@ export default function HotseatPage() {
             <span className="ml-2">
               {openingStep
                 ? `Move ${openingStep} of 2. `
-                : "Pass the device when the turn is done. "}
-              {checkNote}
+                : "Pass the device when the turn is done."}
             </span>
           </>
         ) : (
           statusLine
         )}
       </p>
+
+      {game.status.kind === "active" && (
+        <CheckBanner
+          inCheck={game.status.inCheck}
+          activeSeat={game.state.activeSeat}
+          nameOf={nameOf}
+        />
+      )}
 
       {game.stagedFirst && (
         <div className="mb-2 flex items-center justify-center gap-2 text-xs text-text-dim">
@@ -236,6 +236,8 @@ export default function HotseatPage() {
           <RotoBoard
             state={game.displayState}
             orientation={orientation}
+            homeSeat={game.state.activeSeat}
+            showRound
             selected={game.selected}
             legalTargets={game.selectionMoves}
             pendingMove={game.pendingChoice}
@@ -254,6 +256,7 @@ export default function HotseatPage() {
               game.status.kind === "checkmate" ? game.status.winningTeam : null
             }
           />
+          <RecentMovesStrip turns={game.turns} nameOf={nameOf} />
           <CapturesTray turns={game.turns} staged={game.stagedFirst} />
         </>
       )}

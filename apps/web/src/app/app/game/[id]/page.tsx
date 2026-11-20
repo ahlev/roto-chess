@@ -13,7 +13,6 @@ import {
   isInCheck,
   parseGame,
   partnerOf,
-  SEAT_COMPASS,
   type Seat,
   type Team,
   type Turn,
@@ -35,15 +34,19 @@ import { useOnlineGame } from "@/components/game/useOnlineGame";
 import { useGameSounds } from "@/lib/audio/useGameSounds";
 import { recentMovesBySeat } from "@/lib/game/recentMoves";
 import { victoryContext, type VictoryReason } from "@/lib/game/victory";
+import { CheckBanner } from "@/components/game/CheckBanner";
+import { RecentMovesStrip } from "@/components/game/RecentMovesStrip";
+import {
+  LOCKED_ORIENTATION,
+  SEAT_COLOR_NAME as SEAT_NAME,
+  seatDisplayName,
+  seatShortLabels,
+} from "@/lib/game/seatLabels";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
 
-const SEAT_NAME: Record<Seat, string> = {
-  1: "North",
-  2: "East",
-  3: "South",
-  4: "West",
-};
+/** Per-browser opt-in: turn the board so your own seat is nearest. */
+const ROTATE_KEY = "roto:rotate-to-me";
 
 export default function GameRoomPage({
   params,
@@ -62,7 +65,46 @@ export default function GameRoomPage({
   // shone (halo), vanished (evaporation), or survived its crossing (Avenger).
   const feedback = useTurnFeedback(replay.turns);
 
-  const orientation: Seat = game.mySeat ?? 1;
+  // The board is LOCKED with the first player (Red) at the top for everyone;
+  // a seated player may opt in to turning their own quadrant toward them.
+  const [rotateToMe, setRotateToMe] = useState(false);
+  useEffect(() => {
+    try {
+      setRotateToMe(window.localStorage.getItem(ROTATE_KEY) === "1");
+    } catch {
+      // storage blocked — stay locked
+    }
+  }, []);
+  const toggleRotate = () =>
+    setRotateToMe((prev) => {
+      try {
+        window.localStorage.setItem(ROTATE_KEY, prev ? "0" : "1");
+      } catch {
+        // storage blocked — the choice just won't persist
+      }
+      return !prev;
+    });
+  const orientation: Seat =
+    rotateToMe && game.mySeat !== null ? game.mySeat : LOCKED_ORIENTATION;
+
+  const nameOf = useCallback(
+    (seat: Seat) => seatDisplayName(game.seats, seat),
+    [game.seats],
+  );
+  const dotLabels = useMemo(() => seatShortLabels(game.seats), [game.seats]);
+
+  // Every seat currently in check — said in words under the status line.
+  const inCheck = useMemo<readonly Seat[]>(() => {
+    const s = game.state;
+    if (game.gameStatus !== "active" || s === null) return [];
+    return ([1, 2, 3, 4] as const).filter((seat) => {
+      try {
+        return isInCheck(s, seat);
+      } catch {
+        return false;
+      }
+    });
+  }, [game.gameStatus, game.state]);
   const openingStep =
     game.state && game.state.ply < 20 ? (game.stagedFirst ? 2 : 1) : null;
 
@@ -112,8 +154,8 @@ export default function GameRoomPage({
       openingStep && mine ? ` — move ${openingStep} of 2` : "";
     return mine
       ? `Your move. The table is watching.${step}`
-      : `${SEAT_NAME[seat]} is thinking…`;
-  }, [game.state, game.gameStatus, game.result, game.mySeat, openingStep]);
+      : `${nameOf(seat)} is thinking…`;
+  }, [game.state, game.gameStatus, game.result, game.mySeat, openingStep, nameOf]);
 
   // Move cues for every player's turn (the canonical list grows for remote
   // moves too, so you hear the table play). Check is derived cheaply from the
@@ -206,6 +248,8 @@ export default function GameRoomPage({
         <RotoBoard
           state={game.state}
           orientation={orientation}
+          homeSeat={game.mySeat}
+          seatLabels={dotLabels}
           interactive={false}
           className="w-full opacity-90"
         />
@@ -304,6 +348,14 @@ export default function GameRoomPage({
         </button>
       </div>
 
+      {game.state && (
+        <CheckBanner
+          inCheck={inCheck}
+          activeSeat={game.state.activeSeat}
+          nameOf={nameOf}
+        />
+      )}
+
       {game.submitError && (
         <p
           aria-live="assertive"
@@ -335,6 +387,9 @@ export default function GameRoomPage({
           <RotoBoard
             state={game.displayState}
             orientation={orientation}
+            homeSeat={game.mySeat}
+            seatLabels={dotLabels}
+            showRound
             selected={game.selected}
             legalTargets={game.selectionMoves}
             pendingMove={game.pendingChoice}
@@ -364,11 +419,33 @@ export default function GameRoomPage({
               game.state, not this DB-replayed fold, so composing them can
               blank or mis-credit a capture. Immediacy lives in hotseat, where
               turns and stagedFirst share one coherent hook. */}
+          <RecentMovesStrip turns={replay.turns ?? []} nameOf={nameOf} />
+          {game.mySeat !== null && (
+            <div className="mt-1 flex justify-center">
+              <button
+                type="button"
+                aria-pressed={rotateToMe}
+                onClick={toggleRotate}
+                data-testid="rotate-to-me"
+                className="rounded-full border border-line px-3 py-1 text-xs text-text-dim hover:bg-surface-raised"
+              >
+                {rotateToMe
+                  ? "Lock board (first player at top)"
+                  : "Rotate board to my seat"}
+              </button>
+            </div>
+          )}
           <CapturesTray turns={replay.turns ?? []} />
         </>
       )}
 
-      {showHistory && <HistoryPane turns={replay.turns} failed={replay.failed} />}
+      {showHistory && (
+        <HistoryPane
+          turns={replay.turns}
+          failed={replay.failed}
+          seatLabels={dotLabels}
+        />
+      )}
 
       {game.gameStatus === "active" &&
         game.mySeat !== null &&
@@ -739,9 +816,11 @@ function useReplayedTurns(
 function HistoryPane({
   turns,
   failed,
+  seatLabels,
 }: {
   turns: readonly Turn[] | null;
   failed: boolean;
+  seatLabels: Record<Seat, string>;
 }) {
   if (failed) {
     return (
@@ -753,7 +832,7 @@ function HistoryPane({
   return (
     <div className="min-h-64 rounded-lg border border-line bg-surface">
       {turns ? (
-        <NotationList turns={turns} />
+        <NotationList turns={turns} seatLabels={seatLabels} />
       ) : (
         <p className="p-3 text-sm text-text-dim">Reading the record…</p>
       )}
@@ -826,7 +905,7 @@ function ClaimSeatButtons({
             }}
             className="min-h-11 rounded-lg border border-line p-2 text-sm text-text hover:bg-surface-raised disabled:opacity-50"
           >
-            Take {SEAT_NAME[seat]} ({SEAT_COMPASS[seat]})
+            Take {SEAT_NAME[seat]}
           </button>
         ))}
       </div>

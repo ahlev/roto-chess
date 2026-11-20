@@ -27,6 +27,7 @@ import {
   type Team,
   type Turn,
 } from "@rotochess/engine";
+import { SEAT_COLOR_NAME } from "./seatLabels";
 
 export type VictoryReason =
   | "checkmate"
@@ -53,12 +54,8 @@ export interface VictoryContext {
   detail: string;
 }
 
-const SEAT_NAME: Record<Seat, string> = {
-  1: "North",
-  2: "East",
-  3: "South",
-  4: "West",
-};
+// Seats are named by colour at the table (compass words stay in the rulebook).
+const SEAT_NAME = SEAT_COLOR_NAME;
 
 const KIND_NAME: Record<PieceKind, string> = {
   K: "king",

@@ -7,17 +7,12 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SEAT_COMPASS, type Seat } from "@rotochess/engine";
+import type { Seat } from "@rotochess/engine";
 import { browserClient } from "@/lib/supabase/client";
 import { BRAND } from "@/config/brand";
 import { joinView } from "@/lib/game/joinView";
+import { SEAT_COLOR_NAME as SEAT_NAME } from "@/lib/game/seatLabels";
 
-const SEAT_NAME: Record<Seat, string> = {
-  1: "North",
-  2: "East",
-  3: "South",
-  4: "West",
-};
 
 export default function JoinPage({
   params,
@@ -173,7 +168,7 @@ export default function JoinPage({
             onClick={() => take(seat)}
             className="min-h-11 rounded-lg border border-line p-3 text-sm text-text hover:bg-surface-raised disabled:opacity-50"
           >
-            Take {SEAT_NAME[seat]} ({SEAT_COMPASS[seat]})
+            Take {SEAT_NAME[seat]}
           </button>
         ))}
       </div>

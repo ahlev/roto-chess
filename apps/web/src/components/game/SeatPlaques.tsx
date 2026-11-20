@@ -2,12 +2,13 @@
 
 /**
  * Seat plaques — who occupies each seat, presented as four clean plaques
- * grouped into their partnerships (N+S vs E+W share a bordered pair rail,
+ * grouped into their partnerships (Red+Blue vs Black+Gold share a bordered pair rail,
  * so the teams read at a glance). The ACTIVE seat's plaque is unmistakable:
  * seat-colored border, raised weight, and an underline bar in the seat
  * color — steady emphasis, never a pulse.
  */
-import { SEAT_COMPASS, type Seat } from "@rotochess/engine";
+import type { Seat } from "@rotochess/engine";
+import { SEAT_COLOR_NAME } from "@/lib/game/seatLabels";
 
 export interface PlaqueSeat {
   seat: Seat;
@@ -146,7 +147,7 @@ function Plaque({
           }`}
           style={{ fontFamily: "var(--font-plex-mono)" }}
         >
-          {SEAT_COMPASS[seat]}
+          {SEAT_COLOR_NAME[seat]}
         </span>
         {seat === mySeat && (
           <span className="rounded-full border border-line px-1 text-[9px] uppercase tracking-wide text-text-dim">
@@ -185,7 +186,7 @@ function Plaque({
         data-testid={`seat-plaque-${seat}`}
         className={`${className} cursor-pointer hover:bg-surface-raised`}
         onClick={() => onSeatClick(seat)}
-        aria-label={`${info.displayName}, seat ${SEAT_COMPASS[seat]}${
+        aria-label={`${info.displayName}, ${SEAT_COLOR_NAME[seat]} seat${
           active ? ", to move" : ""
         }`}
       >

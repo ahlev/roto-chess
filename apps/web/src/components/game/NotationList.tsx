@@ -10,7 +10,6 @@
 
 import { useMemo } from "react";
 import {
-  SEAT_COMPASS,
   initialState,
   turnToDisplay,
   type Seat,
@@ -28,9 +27,18 @@ export interface NotationListProps {
   turns: readonly Turn[];
   currentPly?: number;
   onJump?: (ply: number) => void;
+  /** Short label per seat (a player's initial). Defaults to turn order 1–4. */
+  seatLabels?: Record<Seat, string>;
 }
 
-export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
+const TURN_ORDER_LABELS: Record<Seat, string> = { 1: "1", 2: "2", 3: "3", 4: "4" };
+
+export function NotationList({
+  turns,
+  currentPly,
+  onJump,
+  seatLabels = TURN_ORDER_LABELS,
+}: NotationListProps) {
   const tokens = useMemo(() => {
     let state = initialState();
     return turns.map((turn) => {
@@ -71,9 +79,9 @@ export function NotationList({ turns, currentPly, onJump }: NotationListProps) {
           </span>
           {round.map((entry, i) => {
             const ply = r * 4 + i + 1;
-            // Compass letter is a VISIBLE prefix — seat identity is never
+            // The seat label is a VISIBLE prefix — seat identity is never
             // carried by color alone.
-            const text = `${SEAT_COMPASS[entry.seat]}·${entry.display}`;
+            const text = `${seatLabels[entry.seat]}·${entry.display}`;
             return onJump ? (
               <button
                 key={i}

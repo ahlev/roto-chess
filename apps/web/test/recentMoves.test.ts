@@ -32,9 +32,12 @@ describe("recentMovesBySeat", () => {
     expect(got).toHaveLength(4);
   });
 
-  it("uses the FINAL submove of an opening (two-move) turn", () => {
-    const turns: Turn[] = [turn(mv(0, 5), mv(5, 9))]; // seat 1 opening
-    expect(recentMovesBySeat(turns)).toEqual([{ seat: 1, from: 5, to: 9 }]);
+  it("returns BOTH submoves of an opening (two-move) turn", () => {
+    const turns: Turn[] = [turn(mv(0, 5), mv(40, 44))]; // seat 1 opening
+    expect(recentMovesBySeat(turns)).toEqual([
+      { seat: 1, from: 0, to: 5 },
+      { seat: 1, from: 40, to: 44 },
+    ]);
   });
 
   it("covers only the seats that have moved so far", () => {

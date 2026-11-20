@@ -1,6 +1,6 @@
 /**
  * Between-turns memory: for each of the four seats, the from/to squares of
- * that seat's MOST RECENT move. The board darkens these tiles slightly so a
+ * that seat's MOST RECENT turn. The board darkens these tiles slightly so a
  * player returning to the table can see, at a glance, what every opponent just
  * did — a quiet trail of the last round, distinct from the bright highlight on
  * the single freshest move.
@@ -19,21 +19,26 @@ export interface SeatRecentMove {
   to: Square;
 }
 
-/** Each seat's most recent move (newest turn per seat wins). */
+/**
+ * Each seat's most recent TURN, one entry per submove (newest turn per seat
+ * wins). After the opening a turn is one move; in the opening rounds it is
+ * two — one on each side of the meridian — and BOTH are returned, so the
+ * board marks the whole turn rather than only where the second piece landed.
+ */
 export function recentMovesBySeat(
   turns: readonly Turn[],
 ): readonly SeatRecentMove[] {
-  const out = new Map<Seat, SeatRecentMove>();
-  for (let i = turns.length - 1; i >= 0 && out.size < 4; i--) {
+  const out: SeatRecentMove[] = [];
+  const seen = new Set<Seat>();
+  for (let i = turns.length - 1; i >= 0 && seen.size < 4; i--) {
     const seat = ((i % 4) + 1) as Seat;
-    if (out.has(seat)) continue;
+    if (seen.has(seat)) continue;
     const turn = turns[i];
     if (!turn) continue;
-    // The final submove is where the piece actually came to rest this turn
-    // (post-opening there is only one; in the opening we mark the last).
-    const sub: Move | undefined = turn.submoves[turn.submoves.length - 1];
-    if (!sub) continue;
-    out.set(seat, { seat, from: sub.from, to: sub.to });
+    const subs: readonly Move[] = turn.submoves;
+    if (subs.length === 0) continue;
+    seen.add(seat);
+    for (const sub of subs) out.push({ seat, from: sub.from, to: sub.to });
   }
-  return [...out.values()];
+  return out;
 }

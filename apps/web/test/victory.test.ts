@@ -80,16 +80,16 @@ describe("victoryContext — checkmate", () => {
 
     const ctx = victoryContext({ reason: "checkmate", winningTeam: 2, turns, initial });
     expect(ctx.matedSeat).toBe(1);
-    expect(ctx.matedName).toBe("North");
+    expect(ctx.matedName).toBe("Red");
     expect(ctx.matingSeat).toBe(4);
-    expect(ctx.matingName).toBe("West");
+    expect(ctx.matingName).toBe("Gold");
     expect(ctx.matingPieceName).toBe("knight");
     expect(ctx.matingSquare).toBe("C2");
     expect(ctx.turns).toBe(31);
     expect(ctx.headline).toBe("The crown is taken.");
     expect(ctx.winnerLine).toBe("Black & Gold reign.");
     expect(ctx.detail).toBe(
-      "West's knight closed the ring on North's king — checkmate on turn 31.",
+      "Gold's knight closed the ring on Red's king — checkmate on turn 31.",
     );
   });
 
@@ -115,12 +115,12 @@ describe("victoryContext — checkmate", () => {
 
     const ctx = victoryContext({ reason: "checkmate", winningTeam: 2, turns, initial });
     expect(ctx.matedSeat).toBe(1); // from the final position, not the last mover
-    expect(ctx.matedName).toBe("North");
+    expect(ctx.matedName).toBe("Red");
     expect(ctx.matingPieceName).toBeNull(); // last move didn't check → no piece named
     expect(ctx.matingSeat).toBeNull();
     expect(ctx.turns).toBe(33);
     expect(ctx.detail).toBe(
-      "Black & Gold closed the ring on North's king — checkmate on turn 33.",
+      "Black & Gold closed the ring on Red's king — checkmate on turn 33.",
     );
   });
 });
@@ -141,6 +141,6 @@ describe("victoryContext — non-checkmate reasons", () => {
     const ctx = victoryContext({ reason: "resignation", winningTeam: 2, turns, initial });
     expect(ctx.headline).toBe("Black & Gold take it.");
     expect(ctx.winnerLine).toBe("Black & Gold reign.");
-    expect(ctx.detail).toBe("North's king tips.");
+    expect(ctx.detail).toBe("Red's king tips.");
   });
 });

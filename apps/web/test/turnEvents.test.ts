@@ -123,7 +123,7 @@ describe("turnFeedback — halo earned", () => {
     expect(fb.captions).toHaveLength(1);
     expect(fb.captions[0]?.tone).toBe("halo");
     expect(fb.captions[0]?.text).toBe(
-      "North's rook earns its halo — the meridian is open to it, forever.",
+      "Red's rook earns its halo — the meridian is open to it, forever.",
     );
   });
 });
@@ -152,7 +152,7 @@ describe("turnFeedback — evaporation owns the moment (mixed-signal rule)", () 
     expect(fb.captions).toHaveLength(1);
     expect(fb.captions[0]?.tone).toBe("evaporation");
     expect(fb.captions[0]?.text).toBe(
-      "North's knight takes the pawn, then evaporates — the meridian claims it.",
+      "Red's knight takes the pawn, then evaporates — the meridian claims it.",
     );
   });
 
@@ -165,7 +165,7 @@ describe("turnFeedback — evaporation owns the moment (mixed-signal rule)", () 
     expect(move.evaporates).toBe(true);
     const fb = turnFeedback([turn(move)], state);
     expect(fb.captions[0]?.text).toBe(
-      "North's knight crosses its own meridian unhaloed — evaporated.",
+      "Red's knight crosses its own meridian unhaloed — evaporated.",
     );
     expect(fb.evaporateGhosts[0]).toEqual({
       square: parseSquare("32C"),
@@ -202,7 +202,7 @@ describe("turnFeedback — the Avenger moment", () => {
     expect(fb.captions).toHaveLength(1);
     expect(fb.captions[0]?.tone).toBe("avenger");
     expect(fb.captions[0]?.text).toBe(
-      "North's knight avenges the fallen pawn — takes the knight and crosses penalty-free.",
+      "Red's knight avenges the fallen pawn — takes the knight and crosses penalty-free.",
     );
   });
 });

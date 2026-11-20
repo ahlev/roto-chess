@@ -19,6 +19,7 @@ import {
   type Seat,
   type Turn,
 } from "@rotochess/engine";
+import { SEAT_COLOR_NAME } from "./seatLabels";
 
 export interface FallenPiece {
   /** What fell, as it stood when it fell (a promoted queen falls as a queen). */
@@ -95,12 +96,8 @@ export function fallenPieces(
   return fallen;
 }
 
-const SEAT_NAME: Record<Seat, string> = {
-  1: "North",
-  2: "East",
-  3: "South",
-  4: "West",
-};
+// Seats are named by colour at the table (compass words stay in the rulebook).
+const SEAT_NAME = SEAT_COLOR_NAME;
 
 const KIND_NAME: Record<PieceKind, string> = {
   K: "king",

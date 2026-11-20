@@ -80,11 +80,11 @@ test("golden showcase game plays through the UI to checkmate", async ({
   expect(turns.length).toBeGreaterThan(10);
 
   await page.goto("/hotseat");
-  await expect(page.getByTestId("status-line")).toContainText("North to move");
+  await expect(page.getByTestId("status-line")).toContainText("Red to move");
 
   let state: BoardState = initialState();
   for (const turn of turns) {
-    const orientation = state.activeSeat; // rotate-to-player is default ON
+    const orientation = 3; // board is locked: first player (Red) at the top
     for (const sub of turn.submoves) {
       await playSubmove(page, sub as Move, orientation);
     }
@@ -118,7 +118,7 @@ test("mobile 375px: opening round is playable and legible", async ({
   let state: BoardState = initialState();
   // Play the first full round (4 opening turns, 8 submoves) by tapping.
   for (const turn of turns.slice(0, 4)) {
-    const orientation = state.activeSeat;
+    const orientation = 3; // locked: first player at the top
     for (const sub of turn.submoves) {
       await playSubmove(page, sub as Move, orientation);
     }
@@ -126,7 +126,7 @@ test("mobile 375px: opening round is playable and legible", async ({
     if (!applied.ok) throw new Error(applied.error);
     state = applied.state;
   }
-  await expect(page.getByTestId("status-line")).toContainText("North to move");
+  await expect(page.getByTestId("status-line")).toContainText("Red to move");
   await page.screenshot({
     path: testInfo.outputPath("mobile-375.png"),
     fullPage: true,

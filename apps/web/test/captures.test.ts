@@ -138,7 +138,7 @@ describe("fallenPieces — normal captures", () => {
       by: 1,
       ply: 20,
     });
-    expect(fallenLabel(fallen[0]!)).toBe("East's bishop — taken by North");
+    expect(fallenLabel(fallen[0]!)).toBe("Black's bishop — taken by Red");
   });
 
   it("records a captured piece's earned halo, and names it in the label", () => {
@@ -154,7 +154,7 @@ describe("fallenPieces — normal captures", () => {
     const fallen = fallenPieces([turn(move)], state);
     expect(fallen[0]?.haloed).toBe(true);
     expect(fallenLabel(fallen[0]!)).toBe(
-      "East's haloed bishop — taken by North",
+      "Black's haloed bishop — taken by Red",
     );
   });
 
@@ -193,7 +193,7 @@ describe("fallenPieces — en passant (victim ≠ destination)", () => {
     expect(fallen).toHaveLength(1);
     expect(fallen[0]).toMatchObject({ kind: "P", ownerSeat: 2, by: 3 });
     expect(fallen[0]!.ply).toBe(22); // second turn (start ply 21 → +1 → +1)
-    expect(fallenLabel(fallen[0]!)).toBe("East's pawn — taken by South");
+    expect(fallenLabel(fallen[0]!)).toBe("Black's pawn — taken by Blue");
   });
 });
 
@@ -225,7 +225,7 @@ describe("fallenPieces — evaporation (the meridian claims the mover)", () => {
       by: "evaporated",
     });
     expect(fallenLabel(fallen[1]!)).toBe(
-      "North's knight — evaporated at the meridian",
+      "Red's knight — evaporated at the meridian",
     );
   });
 

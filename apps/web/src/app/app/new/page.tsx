@@ -6,15 +6,20 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SEAT_COMPASS, initialState, type Seat } from "@rotochess/engine";
+import { initialState, type Seat } from "@rotochess/engine";
 import { RotoBoard } from "@/components/board/RotoBoard";
 import { SiteHeader } from "@/components/brand/SiteHeader";
+import {
+  LOCKED_ORIENTATION,
+  SEAT_COLOR_NAME as SEAT_NAME,
+} from "@/lib/game/seatLabels";
 
-const SEAT_NAME: Record<Seat, string> = {
-  1: "North",
-  2: "East",
-  3: "South",
-  4: "West",
+/** Turn order: Red always moves first, then clockwise. */
+const TURN_ORDER: Record<Seat, string> = {
+  1: "moves 1st",
+  2: "moves 2nd",
+  3: "moves 3rd",
+  4: "moves 4th",
 };
 
 const SEAT_TEXT: Record<Seat, string> = {
@@ -82,9 +87,9 @@ export default function NewTablePage() {
                 : "border-line"
             }`}
           >
-            {SEAT_COMPASS[s]}
+            {SEAT_NAME[s]}
             <span className="block text-[10px] text-text-dim">
-              {SEAT_NAME[s]}
+              {TURN_ORDER[s]}
             </span>
           </button>
         ))}
@@ -92,7 +97,8 @@ export default function NewTablePage() {
       <div className="mx-auto mb-4 w-48">
         <RotoBoard
           state={initialState()}
-          orientation={seat}
+          orientation={LOCKED_ORIENTATION}
+          homeSeat={seat}
           interactive={false}
           className="w-full"
         />

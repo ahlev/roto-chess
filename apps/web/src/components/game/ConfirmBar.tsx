@@ -10,7 +10,6 @@
 
 import { useEffect, useRef } from "react";
 import {
-  SEAT_COMPASS,
   formatSquare,
   moveToToken,
   type BoardState,
@@ -18,6 +17,7 @@ import {
   type Seat,
 } from "@rotochess/engine";
 import { PromotionPicker } from "@/components/game/PromotionPicker";
+import { SEAT_COLOR_NAME } from "@/lib/game/seatLabels";
 
 const SEAT_BG: Record<Seat, string> = {
   1: "var(--north-red-bright)",
@@ -90,7 +90,7 @@ export function ConfirmBar({
       className={shell}
       role="dialog"
       aria-modal="false"
-      aria-label={`Confirm move for ${SEAT_COMPASS[seat]}`}
+      aria-label={`Confirm move for ${SEAT_COLOR_NAME[seat]}`}
     >
       <div
         className={
@@ -109,7 +109,7 @@ export function ConfirmBar({
               style={{ background: SEAT_BG[seat] }}
               aria-hidden
             />
-            {SEAT_COMPASS[seat]} {token}
+            {token}
             {openingStep && (
               <span className="ml-2 text-xs text-text-dim">
                 move {openingStep} of 2
